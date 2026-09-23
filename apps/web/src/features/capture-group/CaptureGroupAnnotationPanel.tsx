@@ -190,6 +190,7 @@ export function CaptureGroupAnnotationPanel({
   const [cameraDrafts, setCameraDrafts] = useState<Record<string, CameraDraftState>>({})
   const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
+  const isSubmittingRevisionRef = useRef(false)
   const [isRetryingAction, setIsRetryingAction] = useState(false)
   const [inputVersionConflict, setInputVersionConflict] = useState(false)
   const [isRefreshingTask, setIsRefreshingTask] = useState(false)
@@ -211,9 +212,11 @@ export function CaptureGroupAnnotationPanel({
   const [actionReadFailed, setActionReadFailed] = useState(false)
   const [loadedActionContext, setLoadedActionContext] = useState<string | null>(null)
   const annotationFormRef = useRef<HTMLFormElement | null>(null)
-  const [isAllCollapsed, setIsAllCollapsed] = useState(false)
-  const [collapsedSegments, setCollapsedSegments] = useState<Record<number, boolean>>({})
-  const autoCollapsedDraftContext = useRef<string | null>(null)
+  const [collapseState, setCollapseState] = useState<{
+    context: string
+    allCollapsed: boolean
+    bySegment: Record<number, boolean>
+  } | null>(null)
   const [isExcludeModalOpen, setIsExcludeModalOpen] = useState(false)
   const [excludeModalReason, setExcludeModalReason] = useState('')
 
@@ -238,28 +241,6 @@ export function CaptureGroupAnnotationPanel({
         segments: [{ camera_number: view.camera_number, segment_id: segment.segment_id }],
       })),
     )
-  }
-
-  function isSegmentCollapsed(draftId: number) {
-    if (collapsedSegments[draftId] !== undefined) {
-      return collapsedSegments[draftId]
-    }
-    return isAllCollapsed
-  }
-
-  function toggleSegmentCollapsed(draftId: number) {
-    setCollapsedSegments((prev) => ({
-      ...prev,
-      [draftId]: !isSegmentCollapsed(draftId),
-    }))
-  }
-
-  function handleToggleAllCollapse() {
-    setIsAllCollapsed((prev) => {
-      const next = !prev
-      setCollapsedSegments({})
-      return next
-    })
   }
 
   const activeCameraView = task?.camera_views?.find(
@@ -290,12 +271,13 @@ export function CaptureGroupAnnotationPanel({
     activeClipAssetId ?? 'no-clip',
     task?.label_schema_id ?? schema?.label_schema_id ?? 'no-schema',
     task?.label_schema_digest ?? schema?.schema_digest ?? 'no-digest',
+    activeCameraView?.version ?? 0,
   ].join(':')
   const activeCameraDraft = cameraDrafts[activeCameraKey]
   const isDirty = activeCameraDraft?.dirty ?? false
   const contextChanged = isDirty && activeCameraDraft?.context !== draftContext
   const draftSegments = activeCameraDraft?.segments ?? []
-  const annotationNote = activeCameraDraft?.note ?? activeCameraView?.note ?? ''
+  const annotationNote = isDirty ? (activeCameraDraft?.note ?? '') : (activeCameraView?.note ?? '')
   const hasAnnotationToDiscard = Boolean(
     activeCameraView?.state === 'DRAFT' ||
       (activeCameraView?.state === 'SUBMITTED' &&
@@ -306,6 +288,7 @@ export function CaptureGroupAnnotationPanel({
   const groupQualityReceiving = group.receipt_state === 'RECEIVING'
   const canEditActiveCamera = Boolean(
     !inputVersionConflict &&
+      !isSubmittingRevision &&
       !contextChanged &&
       !groupQualityReceiving &&
       activeCameraNumber !== null &&
@@ -378,6 +361,34 @@ export function CaptureGroupAnnotationPanel({
     [task, currentActionCandidates, schema, totalDurationMs, fallbackContext],
   )
   const visibleDraftSegments = isDirty ? draftSegments : pristineDraftSegments
+  const activeCollapseState = collapseState?.context === draftContext ? collapseState : null
+  const isAllCollapsed =
+    activeCollapseState?.allCollapsed ??
+    visibleDraftSegments.length > AUTO_COLLAPSE_SEGMENT_THRESHOLD
+
+  function isSegmentCollapsed(draftId: number) {
+    return activeCollapseState?.bySegment[draftId] ?? isAllCollapsed
+  }
+
+  function toggleSegmentCollapsed(draftId: number) {
+    setCollapseState((previous) => {
+      const current =
+        previous?.context === draftContext
+          ? previous
+          : { context: draftContext, allCollapsed: isAllCollapsed, bySegment: {} }
+      return {
+        ...current,
+        bySegment: {
+          ...current.bySegment,
+          [draftId]: !(current.bySegment[draftId] ?? current.allCollapsed),
+        },
+      }
+    })
+  }
+
+  function handleToggleAllCollapse() {
+    setCollapseState({ context: draftContext, allCollapsed: !isAllCollapsed, bySegment: {} })
+  }
   const updateActiveCameraDraft = useCallback(
     (update: (current: CameraDraftState) => CameraDraftState) => {
       setCameraDrafts((previous) => {
@@ -432,19 +443,6 @@ export function CaptureGroupAnnotationPanel({
           : currentActionJob?.status === 'SUCCEEDED'
             ? { tone: 'neutral', label: 'AI 已完成 · 可直接标注' }
             : { tone: 'neutral', label: '等待 AI 自动分析' }
-
-  useEffect(() => {
-    if (
-      isDirty ||
-      visibleDraftSegments.length <= AUTO_COLLAPSE_SEGMENT_THRESHOLD ||
-      autoCollapsedDraftContext.current === draftContext
-    ) {
-      return
-    }
-    autoCollapsedDraftContext.current = draftContext
-    setIsAllCollapsed(true)
-    setCollapsedSegments({})
-  }, [draftContext, isDirty, visibleDraftSegments.length])
 
   const actionJobStatus = currentActionJob?.status
   const lastActionQueryContext = useRef<string | null>(null)
@@ -542,7 +540,7 @@ export function CaptureGroupAnnotationPanel({
     const cameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
     return {
       segments:
-        stored?.segments ??
+        (stored?.dirty ? stored.segments : undefined) ??
         (cameraNumber === activeCameraNumber
           ? visibleDraftSegments
           : (cameraView?.segments.map((segment) =>
@@ -551,7 +549,7 @@ export function CaptureGroupAnnotationPanel({
                 source_candidate_ids: segment.source_candidate_ids,
               }),
             ) ?? [])),
-      note: stored?.note ?? cameraView?.note ?? '',
+      note: stored?.dirty ? stored.note : (cameraView?.note ?? ''),
     }
   }
 
@@ -560,7 +558,16 @@ export function CaptureGroupAnnotationPanel({
     nextState: 'PENDING' | 'DRAFT' | 'SUBMITTED' | 'EXCLUDED',
     reason = '',
   ) {
-    if (isSubmittingRevision || inputVersionConflict || !canUpdateCameraViews()) {
+    if (
+      isSubmittingRevisionRef.current ||
+      isSubmittingRevision ||
+      inputVersionConflict ||
+      !canUpdateCameraViews()
+    ) {
+      return false
+    }
+    if (contextChanged && nextState !== 'EXCLUDED' && nextState !== 'PENDING') {
+      void message.warning('此机位已被更新，请先核对最新标注。')
       return false
     }
     const targetCameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
@@ -585,19 +592,32 @@ export function CaptureGroupAnnotationPanel({
       const errors = validateSegments(draft.segments, isActiveCamera ? totalDurationMs : null)
       if (Object.keys(errors).length) {
         setSegmentErrors(errors)
-        return
+        setCollapseState((previous) => ({
+          context: draftContext,
+          allCollapsed: previous?.context === draftContext ? previous.allCollapsed : isAllCollapsed,
+          bySegment: {
+            ...(previous?.context === draftContext ? previous.bySegment : {}),
+            ...Object.fromEntries(Object.keys(errors).map((draftId) => [draftId, false])),
+          },
+        }))
+        return false
       }
     }
 
+    isSubmittingRevisionRef.current = true
     setIsSubmittingRevision(true)
     try {
       const activeTask = await prepareAnnotationTask()
+      const resolvedTargetView =
+        (activeTask.camera_views ?? cameraViews).find(
+          (view) => view.camera_number === cameraNumber,
+        ) ?? targetCameraView
       const updatedTask = await updateAnnotationCameraView(
         projectId,
         activeTask.annotation_task_id,
         cameraNumber,
         {
-          expected_version: targetCameraView?.version ?? 0,
+          expected_version: resolvedTargetView?.version ?? 0,
           expected_input_version: activeTask.group_input_version,
           state: nextState,
           segments:
@@ -615,42 +635,13 @@ export function CaptureGroupAnnotationPanel({
         },
       )
       onTaskChange(updatedTask)
-      const savedView = updatedTask.camera_views?.find(
-        (view) => view.camera_number === cameraNumber,
-      )
-      if (savedView) {
-        setCameraDrafts((previous) => {
-          const next = { ...previous }
-          const key = String(cameraNumber)
-          if (nextState === 'PENDING' || nextState === 'EXCLUDED') {
-            // These transitions intentionally clear the editable server draft.
-            // Keeping [] here would mask the revision/candidate draft restored by
-            // initialDraftSegments on the next render.
-            delete next[key]
-            return next
-          }
-          next[key] = {
-            segments: savedView.segments.map((segment) =>
-              createDraftSegment(segment, 0, 1000, {
-                segment_id: segment.segment_id,
-                source_candidate_ids: segment.source_candidate_ids,
-              }),
-            ),
-            note: savedView.note,
-            dirty: false,
-            context: [
-              updatedTask.annotation_task_id,
-              updatedTask.group_input_version,
-              cameraNumber,
-              savedView.clip_asset_id ?? 'no-clip',
-              updatedTask.label_schema_id,
-              updatedTask.label_schema_digest,
-            ].join(':'),
-          }
-          return next
-        })
-      }
+      setCameraDrafts((previous) => {
+        const next = { ...previous }
+        delete next[String(cameraNumber)]
+        return next
+      })
       setSegmentErrors({})
+      const isReediting = nextState === 'DRAFT' && targetCameraView?.state === 'SUBMITTED'
       void message.success(
         nextState === 'SUBMITTED'
           ? `机位 ${cameraNumber} 标注已提交。`
@@ -658,14 +649,43 @@ export function CaptureGroupAnnotationPanel({
             ? `机位 ${cameraNumber} 已排除，本次不纳入标注。`
             : nextState === 'PENDING'
               ? `机位 ${cameraNumber} 已取消排除并恢复为待处理，请重新确认标注。`
-              : `机位 ${cameraNumber} 草稿已保存。`,
+              : isReediting
+                ? `机位 ${cameraNumber} 已恢复为草稿，可继续编辑。`
+                : `机位 ${cameraNumber} 草稿已保存。`,
       )
       return true
     } catch (error) {
+      if (
+        error instanceof AnnotationTaskApiError &&
+        error.errorCode === 'ANNOTATION_CAMERA_VIEW_VERSION_CONFLICT'
+      ) {
+        try {
+          const taskList = await listAnnotationTasks(projectId).catch(() => null)
+          const latest = taskList?.items.find(
+            (candidate) =>
+              candidate.capture_group_id === captureGroupId ||
+              candidate.annotation_task_id === task?.annotation_task_id,
+          )
+          if (latest) {
+            onTaskChange(latest)
+            if (latest.group_input_version !== task?.group_input_version) {
+              setInputVersionConflict(true)
+              setIsExcludeModalOpen(false)
+              void message.warning('采集输入已变化，请刷新并重新准备任务。')
+            } else {
+              void message.warning('此机位已被更新，已加载最新状态；请核对后再次确认。')
+            }
+            return false
+          }
+        } catch {
+          // Keep the original conflict message when the current task cannot be loaded.
+        }
+      }
       recordInputVersionConflict(error)
       void message.error(error instanceof Error ? error.message : '机位标注未保存，请重试。')
       return false
     } finally {
+      isSubmittingRevisionRef.current = false
       setIsSubmittingRevision(false)
     }
   }
@@ -687,8 +707,9 @@ export function CaptureGroupAnnotationPanel({
 
   async function submitRevision(event?: FormEvent<HTMLFormElement>) {
     if (event) event.preventDefault()
-    if (!canSubmitGroupRevision || isSubmittingRevision) return
+    if (isSubmittingRevisionRef.current || !canSubmitGroupRevision || isSubmittingRevision) return
     setSegmentErrors({})
+    isSubmittingRevisionRef.current = true
     setIsSubmittingRevision(true)
     try {
       if (!task) throw new Error('标注任务尚未创建。')
@@ -707,6 +728,7 @@ export function CaptureGroupAnnotationPanel({
       recordInputVersionConflict(error)
       void message.error(error instanceof Error ? error.message : '修订暂未提交，请稍后重试。')
     } finally {
+      isSubmittingRevisionRef.current = false
       setIsSubmittingRevision(false)
     }
   }
@@ -999,6 +1021,7 @@ export function CaptureGroupAnnotationPanel({
                   <Button
                     type="text"
                     size="small"
+                    htmlType="button"
                     className="capture-group-collapse-btn"
                     onClick={handleToggleAllCollapse}
                     icon={
@@ -1016,7 +1039,13 @@ export function CaptureGroupAnnotationPanel({
                 {activeCameraView?.state === 'SUBMITTED' ? (
                   <Button
                     size="small"
-                    disabled={inputVersionConflict || !canUpdateCameraViews()}
+                    htmlType="button"
+                    disabled={
+                      isSubmittingRevision ||
+                      inputVersionConflict ||
+                      contextChanged ||
+                      !canUpdateCameraViews()
+                    }
                     loading={isSubmittingRevision}
                     onClick={() =>
                       activeCameraNumber !== null &&
@@ -1125,7 +1154,8 @@ export function CaptureGroupAnnotationPanel({
           {/* --- 当前机位操作区 --- */}
           <div className="capture-group-camera-action-bar">
             <p className="capture-group-camera-disposition-hint">
-              已提交机位的动作区间将纳入整组修订；无可确认动作时请选择排除（原视频与 AI 候选不受影响，可随时取消排除）。
+              已提交机位的动作区间将纳入整组修订；无可确认动作时请选择排除（原视频与 AI
+              候选不受影响，可随时取消排除）。
             </p>
             {activeCameraView?.state === 'EXCLUDED' ? (
               <div className="camera-action-state-banner is-excluded">
@@ -1136,7 +1166,8 @@ export function CaptureGroupAnnotationPanel({
                 <Button
                   type="primary"
                   ghost
-                  disabled={!canUpdateCameraViews()}
+                  htmlType="button"
+                  disabled={isSubmittingRevision || !canUpdateCameraViews()}
                   loading={isSubmittingRevision}
                   onClick={() =>
                     activeCameraNumber !== null &&
@@ -1156,26 +1187,51 @@ export function CaptureGroupAnnotationPanel({
                       : '当前没有动作段，请重新编辑补充，或排除本机位。'}
                   </p>
                 </div>
-                <Button
-                  danger
-                  htmlType="button"
-                  size="small"
-                  disabled={inputVersionConflict || !canUpdateCameraViews()}
-                  onClick={() => {
-                    setExcludeModalReason(activeCameraView.exclusion_reason ?? '')
-                    setIsExcludeModalOpen(true)
-                  }}
-                >
-                  排除本机位
-                </Button>
+                <div className="camera-action-banner-actions">
+                  <Button
+                    size="small"
+                    htmlType="button"
+                    disabled={
+                      isSubmittingRevision ||
+                      inputVersionConflict ||
+                      contextChanged ||
+                      !canUpdateCameraViews()
+                    }
+                    loading={isSubmittingRevision}
+                    onClick={() =>
+                      activeCameraNumber !== null &&
+                      void saveCameraView(activeCameraNumber, 'DRAFT')
+                    }
+                  >
+                    重新编辑本机位
+                  </Button>
+                  <Button
+                    danger
+                    htmlType="button"
+                    size="small"
+                    disabled={
+                      isSubmittingRevision || inputVersionConflict || !canUpdateCameraViews()
+                    }
+                    onClick={() => {
+                      setExcludeModalReason(activeCameraView.exclusion_reason ?? '')
+                      setIsExcludeModalOpen(true)
+                    }}
+                  >
+                    排除本机位
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="camera-action-button-group">
                 <Button
                   danger
                   type="text"
+                  htmlType="button"
                   disabled={
-                    inputVersionConflict || !canUpdateCameraViews() || activeCameraNumber === null
+                    isSubmittingRevision ||
+                    inputVersionConflict ||
+                    !canUpdateCameraViews() ||
+                    activeCameraNumber === null
                   }
                   onClick={() => {
                     setExcludeModalReason(activeCameraView?.exclusion_reason ?? '')

@@ -338,12 +338,21 @@ class AnnotationTaskViewService {
 		return segments.stream().map(segment -> {
 			var value = new LinkedHashMap<String, Object>();
 			value.put("segment_id", segment.segmentId().toString());
-			value.put("start_ms", segment.startMs());
-			value.put("end_ms", segment.endMs());
+			value.put("start_ms", jsonInteger(segment.startMs()));
+			value.put("end_ms", jsonInteger(segment.endMs()));
 			value.put("label", segment.label());
 			value.put("source_candidate_ids", segment.sourceCandidateIds().stream().map(UUID::toString).toList());
 			return java.util.Collections.unmodifiableMap(value);
 		}).toList();
+	}
+
+	private static Number jsonInteger(long value) {
+		// Match JSON readback types so an unchanged draft does not bump its version on
+		// each flush.
+		if (value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
+			return Integer.valueOf((int) value);
+		}
+		return Long.valueOf(value);
 	}
 
 	private static Set<Integer> cameraNumbers(Map<String, Object> viewSet) {

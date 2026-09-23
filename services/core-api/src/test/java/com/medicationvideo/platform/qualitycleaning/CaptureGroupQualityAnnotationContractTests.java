@@ -259,6 +259,58 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
+	void cameraCanCycleThroughSubmitEditExcludeAndRestoreBeforeGroupReview() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("camera-cycle-quality"))
+			.andExpect(status().isOk());
+		assignTask(group, MEMBER_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("camera-cycle-assignment"))
+			.andExpect(status().isCreated());
+		var taskId = taskId(group);
+		var view = this.jdbcTemplate.queryForMap("""
+				SELECT v.camera_number, v.version, t.group_input_version
+				FROM annotation_task_view v
+				JOIN annotation_task t ON t.annotation_task_id = v.annotation_task_id
+				WHERE v.annotation_task_id = ?
+				""", taskId);
+		var cameraNumber = ((Number) view.get("camera_number")).intValue();
+		var inputVersion = view.get("group_input_version");
+		var segmentId = UUID.randomUUID();
+		long version = ((Number) view.get("version")).longValue();
+		long initialVersion = version;
+		for (var state : List.of("SUBMITTED", "DRAFT", "EXCLUDED", "PENDING", "SUBMITTED", "DRAFT", "EXCLUDED")) {
+			var segments = state.equals("SUBMITTED") || state.equals("DRAFT")
+					? "[{\"segment_id\":\"%s\",\"start_ms\":0,\"end_ms\":100,\"label\":\"acquire_item\",\"source_candidate_ids\":[]}]"
+						.formatted(segmentId)
+					: "[]";
+			var reason = state.equals("EXCLUDED") ? "\"No confirmable action\"" : "null";
+			var response = this.mockMvc
+				.perform(put("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/camera-views/{cameraNumber}",
+						PROJECT_ID, taskId, cameraNumber)
+					.header("Authorization", "Bearer " + MEMBER_TOKEN)
+					.header("Idempotency-Key", key("camera-cycle-" + version))
+					.header("X-Request-Id", key("camera-cycle-request-" + version))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{"expected_version":%d,"expected_input_version":"%s","state":"%s",
+							 "segments":%s,"note":"","exclusion_reason":%s}
+							""".formatted(version, inputVersion, state, segments, reason)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.camera_views[0].state").value(state))
+				.andReturn();
+			long nextVersion = ((Number) JsonPath.read(response.getResponse().getContentAsString(),
+					"$.camera_views[0].version"))
+				.longValue();
+			assertTrue(nextVersion > version, "Camera version must advance after " + state);
+			assertEquals(nextVersion, this.jdbcTemplate.queryForObject(
+					"SELECT version FROM annotation_task_view WHERE annotation_task_id = ? AND camera_number = ?",
+					Long.class, taskId, cameraNumber),
+					"Response must carry the committed camera version after " + state);
+			version = nextVersion;
+		}
+		assertTrue(version > initialVersion);
+	}
+
+	@Test
 	void reviewCanReturnAnExcludedCameraWithoutReopeningOtherCameras() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 1);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0, key("excluded-return-quality"))

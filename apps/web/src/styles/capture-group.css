@@ -1287,6 +1287,13 @@
   min-width: 0;
 }
 
+.camera-action-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  flex-shrink: 0;
+}
+
 .camera-action-state-banner.is-submitted {
   background: var(--app-color-success-surface);
   border: 1px solid color-mix(in srgb, var(--app-color-success) 25%, transparent);

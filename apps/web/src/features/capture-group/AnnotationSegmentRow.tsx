@@ -63,9 +63,8 @@ export function AnnotationSegmentRow({
       .filter(Boolean)
       .join(' ') || undefined
   const endDescribedBy =
-    [formattedEnd ? endReadableId : '', errors.end ? endErrorId : '']
-      .filter(Boolean)
-      .join(' ') || undefined
+    [formattedEnd ? endReadableId : '', errors.end ? endErrorId : ''].filter(Boolean).join(' ') ||
+    undefined
   const segmentStyle = getActionStyle(segment.label)
 
   return (
@@ -150,211 +149,217 @@ export function AnnotationSegmentRow({
               ) : null}
             </div>
           </div>
-          <label
-            className="capture-group-segment-inline-label"
-            htmlFor={`segment-${segment.draftId}-label`}
-          >
-            <span>动作标签</span>
-            <Select
-              id={`segment-${segment.draftId}-label`}
-              size="small"
-              aria-label={`第 ${index + 1} 个时间段动作标签`}
-              aria-invalid={errors.label ? true : undefined}
-              aria-describedby={errors.label ? `segment-${segment.draftId}-label-error` : undefined}
-              value={segment.label || undefined}
-              placeholder="选择标签"
-              disabled={!canEdit || !sortedLabels.length}
-              options={sortedLabels.map((label) => ({
-                value: label.label_id,
-                label: label.display_name,
-              }))}
-              onChange={(value) => onUpdateField(segment.draftId, 'label', value)}
-            />
-            {errors.label ? (
-              <small id={`segment-${segment.draftId}-label-error`} role="alert">
-                {errors.label}
-              </small>
-            ) : null}
-          </label>
+          {!collapsed ? (
+            <label
+              className="capture-group-segment-inline-label"
+              htmlFor={`segment-${segment.draftId}-label`}
+            >
+              <span>动作标签</span>
+              <Select
+                id={`segment-${segment.draftId}-label`}
+                size="small"
+                aria-label={`第 ${index + 1} 个时间段动作标签`}
+                aria-invalid={errors.label ? true : undefined}
+                aria-describedby={
+                  errors.label ? `segment-${segment.draftId}-label-error` : undefined
+                }
+                value={segment.label || undefined}
+                placeholder="选择标签"
+                disabled={!canEdit || !sortedLabels.length}
+                options={sortedLabels.map((label) => ({
+                  value: label.label_id,
+                  label: label.display_name,
+                }))}
+                onChange={(value) => onUpdateField(segment.draftId, 'label', value)}
+              />
+              {errors.label ? (
+                <small id={`segment-${segment.draftId}-label-error`} role="alert">
+                  {errors.label}
+                </small>
+              ) : null}
+            </label>
+          ) : null}
         </div>
-        <div className="capture-group-segment-edit-body">
-          <fieldset className="capture-group-segment-time-range">
-            <legend className="capture-group-segment-legend">时间范围</legend>
-            <div className="capture-group-segment-time-controls">
-              <div className="capture-group-segment-time-field">
-                <div className="capture-group-segment-time-field-header">
-                  <label htmlFor={`segment-${segment.draftId}-start`}>开始时间（毫秒）</label>
-                  {formattedStart ? (
-                    <span id={startReadableId} className="capture-group-segment-time-readable">
-                      {formattedStart}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="capture-group-segment-time-input-wrap">
-                  <input
-                    id={`segment-${segment.draftId}-start`}
-                    name={`segment-${segment.draftId}-start-ms`}
-                    type="number"
-                    min={0}
-                    step={1}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={Number.isFinite(segment.start_ms) ? segment.start_ms : ''}
-                    aria-invalid={errors.start ? true : undefined}
-                    aria-describedby={startDescribedBy}
-                    disabled={!canEdit}
-                    onChange={(event) =>
-                      onUpdateField(
-                        segment.draftId,
-                        'start_ms',
-                        event.target.value === '' ? Number.NaN : Number(event.target.value),
-                      )
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                        event.preventDefault()
-                        const multiplier = event.key === 'ArrowUp' ? 1 : -1
-                        const delta = (event.shiftKey ? 500 : 100) * multiplier
+        {!collapsed ? (
+          <div className="capture-group-segment-edit-body">
+            <fieldset className="capture-group-segment-time-range">
+              <legend className="capture-group-segment-legend">时间范围</legend>
+              <div className="capture-group-segment-time-controls">
+                <div className="capture-group-segment-time-field">
+                  <div className="capture-group-segment-time-field-header">
+                    <label htmlFor={`segment-${segment.draftId}-start`}>开始时间（毫秒）</label>
+                    {formattedStart ? (
+                      <span id={startReadableId} className="capture-group-segment-time-readable">
+                        {formattedStart}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="capture-group-segment-time-input-wrap">
+                    <input
+                      id={`segment-${segment.draftId}-start`}
+                      name={`segment-${segment.draftId}-start-ms`}
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={Number.isFinite(segment.start_ms) ? segment.start_ms : ''}
+                      aria-invalid={errors.start ? true : undefined}
+                      aria-describedby={startDescribedBy}
+                      disabled={!canEdit}
+                      onChange={(event) =>
+                        onUpdateField(
+                          segment.draftId,
+                          'start_ms',
+                          event.target.value === '' ? Number.NaN : Number(event.target.value),
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                          event.preventDefault()
+                          const multiplier = event.key === 'ArrowUp' ? 1 : -1
+                          const delta = (event.shiftKey ? 500 : 100) * multiplier
+                          onNudgeTime(segment.draftId, 'start_ms', delta)
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="capture-group-segment-nudge-btn"
+                      disabled={!canEdit}
+                      aria-label={`第 ${index + 1} 个时间段：开始时间减少 100 毫秒`}
+                      title="微调 -100ms（按住 Shift 微调 -500ms）"
+                      onClick={(e) => {
+                        const delta = e.shiftKey ? -500 : -100
                         onNudgeTime(segment.draftId, 'start_ms', delta)
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="capture-group-segment-nudge-btn"
-                    disabled={!canEdit}
-                    aria-label={`第 ${index + 1} 个时间段：开始时间减少 100 毫秒`}
-                    title="微调 -100ms（按住 Shift 微调 -500ms）"
-                    onClick={(e) => {
-                      const delta = e.shiftKey ? -500 : -100
-                      onNudgeTime(segment.draftId, 'start_ms', delta)
-                    }}
-                  >
-                    -100
-                  </button>
-                  <button
-                    type="button"
-                    className="capture-group-segment-nudge-btn"
-                    disabled={!canEdit}
-                    aria-label={`第 ${index + 1} 个时间段：开始时间增加 100 毫秒`}
-                    title="微调 +100ms（按住 Shift 微调 +500ms）"
-                    onClick={(e) => {
-                      const delta = e.shiftKey ? 500 : 100
-                      onNudgeTime(segment.draftId, 'start_ms', delta)
-                    }}
-                  >
-                    +100
-                  </button>
-                  <Button
-                    type="text"
-                    size="small"
-                    htmlType="button"
-                    className="capture-group-segment-set-current-btn"
-                    icon={<Clock size={11} strokeWidth={2} />}
-                    disabled={!canUseCurrentPlaybackTime}
-                    aria-label={`第 ${index + 1} 个时间段：使用当前时间作为开始`}
-                    title="使用当前播放时间作为开始时间"
-                    onClick={() => onSetCurrentTime(segment.draftId, 'start_ms')}
-                  >
-                    当前
-                  </Button>
-                </div>
-                {errors.start ? (
-                  <small id={startErrorId} role="alert">
-                    {errors.start}
-                  </small>
-                ) : null}
-              </div>
-              <span className="capture-group-segment-time-arrow" aria-hidden="true">
-                →
-              </span>
-              <div className="capture-group-segment-time-field">
-                <div className="capture-group-segment-time-field-header">
-                  <label htmlFor={`segment-${segment.draftId}-end`}>结束时间（毫秒）</label>
-                  {formattedEnd ? (
-                    <span id={endReadableId} className="capture-group-segment-time-readable">
-                      {formattedEnd}
-                    </span>
+                      }}
+                    >
+                      -100
+                    </button>
+                    <button
+                      type="button"
+                      className="capture-group-segment-nudge-btn"
+                      disabled={!canEdit}
+                      aria-label={`第 ${index + 1} 个时间段：开始时间增加 100 毫秒`}
+                      title="微调 +100ms（按住 Shift 微调 +500ms）"
+                      onClick={(e) => {
+                        const delta = e.shiftKey ? 500 : 100
+                        onNudgeTime(segment.draftId, 'start_ms', delta)
+                      }}
+                    >
+                      +100
+                    </button>
+                    <Button
+                      type="text"
+                      size="small"
+                      htmlType="button"
+                      className="capture-group-segment-set-current-btn"
+                      icon={<Clock size={11} strokeWidth={2} />}
+                      disabled={!canUseCurrentPlaybackTime}
+                      aria-label={`第 ${index + 1} 个时间段：使用当前时间作为开始`}
+                      title="使用当前播放时间作为开始时间"
+                      onClick={() => onSetCurrentTime(segment.draftId, 'start_ms')}
+                    >
+                      当前
+                    </Button>
+                  </div>
+                  {errors.start ? (
+                    <small id={startErrorId} role="alert">
+                      {errors.start}
+                    </small>
                   ) : null}
                 </div>
-                <div className="capture-group-segment-time-input-wrap">
-                  <input
-                    id={`segment-${segment.draftId}-end`}
-                    name={`segment-${segment.draftId}-end-ms`}
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={Number.isFinite(segment.end_ms) ? segment.end_ms : ''}
-                    aria-invalid={errors.end ? true : undefined}
-                    aria-describedby={endDescribedBy}
-                    disabled={!canEdit}
-                    onChange={(event) =>
-                      onUpdateField(
-                        segment.draftId,
-                        'end_ms',
-                        event.target.value === '' ? Number.NaN : Number(event.target.value),
-                      )
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                        event.preventDefault()
-                        const multiplier = event.key === 'ArrowUp' ? 1 : -1
-                        const delta = (event.shiftKey ? 500 : 100) * multiplier
-                        onNudgeTime(segment.draftId, 'end_ms', delta)
+                <span className="capture-group-segment-time-arrow" aria-hidden="true">
+                  →
+                </span>
+                <div className="capture-group-segment-time-field">
+                  <div className="capture-group-segment-time-field-header">
+                    <label htmlFor={`segment-${segment.draftId}-end`}>结束时间（毫秒）</label>
+                    {formattedEnd ? (
+                      <span id={endReadableId} className="capture-group-segment-time-readable">
+                        {formattedEnd}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="capture-group-segment-time-input-wrap">
+                    <input
+                      id={`segment-${segment.draftId}-end`}
+                      name={`segment-${segment.draftId}-end-ms`}
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={Number.isFinite(segment.end_ms) ? segment.end_ms : ''}
+                      aria-invalid={errors.end ? true : undefined}
+                      aria-describedby={endDescribedBy}
+                      disabled={!canEdit}
+                      onChange={(event) =>
+                        onUpdateField(
+                          segment.draftId,
+                          'end_ms',
+                          event.target.value === '' ? Number.NaN : Number(event.target.value),
+                        )
                       }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="capture-group-segment-nudge-btn"
-                    disabled={!canEdit}
-                    aria-label={`第 ${index + 1} 个时间段：结束时间减少 100 毫秒`}
-                    title="微调 -100ms（按住 Shift 微调 -500ms）"
-                    onClick={(e) => {
-                      const delta = e.shiftKey ? -500 : -100
-                      onNudgeTime(segment.draftId, 'end_ms', delta)
-                    }}
-                  >
-                    -100
-                  </button>
-                  <button
-                    type="button"
-                    className="capture-group-segment-nudge-btn"
-                    disabled={!canEdit}
-                    aria-label={`第 ${index + 1} 个时间段：结束时间增加 100 毫秒`}
-                    title="微调 +100ms（按住 Shift 微调 +500ms）"
-                    onClick={(e) => {
-                      const delta = e.shiftKey ? 500 : 100
-                      onNudgeTime(segment.draftId, 'end_ms', delta)
-                    }}
-                  >
-                    +100
-                  </button>
-                  <Button
-                    type="text"
-                    size="small"
-                    htmlType="button"
-                    className="capture-group-segment-set-current-btn"
-                    icon={<Clock size={11} strokeWidth={2} />}
-                    disabled={!canUseCurrentPlaybackTime}
-                    aria-label={`第 ${index + 1} 个时间段：使用当前时间作为结束`}
-                    title="使用当前播放时间作为结束时间"
-                    onClick={() => onSetCurrentTime(segment.draftId, 'end_ms')}
-                  >
-                    当前
-                  </Button>
+                      onKeyDown={(event) => {
+                        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                          event.preventDefault()
+                          const multiplier = event.key === 'ArrowUp' ? 1 : -1
+                          const delta = (event.shiftKey ? 500 : 100) * multiplier
+                          onNudgeTime(segment.draftId, 'end_ms', delta)
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="capture-group-segment-nudge-btn"
+                      disabled={!canEdit}
+                      aria-label={`第 ${index + 1} 个时间段：结束时间减少 100 毫秒`}
+                      title="微调 -100ms（按住 Shift 微调 -500ms）"
+                      onClick={(e) => {
+                        const delta = e.shiftKey ? -500 : -100
+                        onNudgeTime(segment.draftId, 'end_ms', delta)
+                      }}
+                    >
+                      -100
+                    </button>
+                    <button
+                      type="button"
+                      className="capture-group-segment-nudge-btn"
+                      disabled={!canEdit}
+                      aria-label={`第 ${index + 1} 个时间段：结束时间增加 100 毫秒`}
+                      title="微调 +100ms（按住 Shift 微调 +500ms）"
+                      onClick={(e) => {
+                        const delta = e.shiftKey ? 500 : 100
+                        onNudgeTime(segment.draftId, 'end_ms', delta)
+                      }}
+                    >
+                      +100
+                    </button>
+                    <Button
+                      type="text"
+                      size="small"
+                      htmlType="button"
+                      className="capture-group-segment-set-current-btn"
+                      icon={<Clock size={11} strokeWidth={2} />}
+                      disabled={!canUseCurrentPlaybackTime}
+                      aria-label={`第 ${index + 1} 个时间段：使用当前时间作为结束`}
+                      title="使用当前播放时间作为结束时间"
+                      onClick={() => onSetCurrentTime(segment.draftId, 'end_ms')}
+                    >
+                      当前
+                    </Button>
+                  </div>
+                  {errors.end ? (
+                    <small id={endErrorId} role="alert">
+                      {errors.end}
+                    </small>
+                  ) : null}
                 </div>
-                {errors.end ? (
-                  <small id={endErrorId} role="alert">
-                    {errors.end}
-                  </small>
-                ) : null}
               </div>
-            </div>
-          </fieldset>
-        </div>
+            </fieldset>
+          </div>
+        ) : null}
       </div>
     </div>
   )
