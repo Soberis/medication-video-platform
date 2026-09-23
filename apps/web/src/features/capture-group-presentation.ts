@@ -61,19 +61,20 @@ export function isHumanAnnotationExportReady(
 
 export function annotationTaskStatusLabel(
   task: Pick<AnnotationTask, 'status' | 'annotation_revision'>,
+  options?: { pendingLabel?: string },
 ): string {
   if (task.status === 'COMPLETED') return '已完成'
   if (task.status === 'SUBMITTED') return '待复核'
   if (task.annotation_revision?.review?.decision === 'REJECTED') return '待返工'
-  return '待标注'
+  return options?.pendingLabel ?? '待标注'
 }
 
 export function annotationTaskStatusTone(
   task: Pick<AnnotationTask, 'status' | 'annotation_revision'>,
 ): StatusIndicatorTone {
-  if (task.status === 'COMPLETED') return 'neutral'
+  if (task.status === 'COMPLETED') return 'success'
   if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
-  return 'information'
+  return task.status === 'SUBMITTED' ? 'information' : 'neutral'
 }
 
 export function captureGroupTaskDestination(
@@ -119,7 +120,6 @@ export function captureGroupTaskDestination(
 export const captureGroupFocusTargetIds: Record<CaptureGroupFocus, string> = {
   annotation: 'capture-group-annotation',
   review: 'capture-group-review',
-  cleaning: 'capture-group-review',
 }
 
 export const captureGroupReviewFallbackTargetId = 'capture-group-review-context'
@@ -129,8 +129,11 @@ export function captureGroupFocusFromLocation(
   hash: string,
 ): CaptureGroupFocus | null {
   const queryFocus = new URLSearchParams(search).get('focus')
-  if (queryFocus === 'annotation' || queryFocus === 'review' || queryFocus === 'cleaning') {
+  if (queryFocus === 'annotation' || queryFocus === 'review') {
     return queryFocus
+  }
+  if (queryFocus === 'cleaning') {
+    return 'review'
   }
 
   const hashTarget = hash.replace(/^#/, '')

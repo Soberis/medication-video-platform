@@ -9,10 +9,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-
 import com.medicationvideo.platform.iamproject.ProjectActor;
 
 @RestController
@@ -41,10 +37,4 @@ class AnnotationLabelSchemaController {
 		return actor;
 	}
 
-}
-
-record AnnotationLabelCreateRequest(@NotBlank @Pattern(regexp = "^[a-z][a-z0-9_]{0,63}$") String labelId,
-		@NotBlank @jakarta.validation.constraints.Size(max = 128) @Pattern(regexp = "^[^\\p{Cc}]+$") String displayName,
-		@NotBlank @jakarta.validation.constraints.Size(max = 512) @Pattern(
-				regexp = "^[^\\p{Cc}]+$") String description) {
 }

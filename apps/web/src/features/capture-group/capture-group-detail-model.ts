@@ -4,6 +4,10 @@ import type { CaptureGroup, CaptureGroupStream } from '@/api/capture-groups'
 import type { HandPoseCandidateResponse } from '@/api/catalog'
 import type { StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import type { CandidateLoadState } from '@/features/catalog/hand-pose-candidate-state'
+import {
+  annotationTaskStatusLabel,
+  annotationTaskStatusTone,
+} from '@/features/capture-group-presentation'
 
 export interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number
@@ -429,17 +433,10 @@ export function candidateLiveStatusLabel(
 }
 
 export function formatTaskStatus(task: AnnotationTask) {
-  if (task.status === 'COMPLETED') return '已完成'
-  if (task.status === 'SUBMITTED') return '待复核'
-  if (task.annotation_revision?.review?.decision === 'REJECTED') return '待修改'
-  return '待提交'
+  return annotationTaskStatusLabel(task, { pendingLabel: '待提交' })
 }
 
-export function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
-  if (task.status === 'COMPLETED') return 'success'
-  if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
-  return task.status === 'SUBMITTED' ? 'information' : 'neutral'
-}
+export const taskStatusTone = annotationTaskStatusTone
 
 export function createGroupViewRows(group: CaptureGroup | null): GroupViewRow[] {
   if (!group) return []

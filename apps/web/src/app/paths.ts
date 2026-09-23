@@ -1,4 +1,4 @@
-export type CaptureGroupFocus = 'annotation' | 'review' | 'cleaning'
+export type CaptureGroupFocus = 'annotation' | 'review'
 
 export const paths = {
   login: '/login',

@@ -80,8 +80,7 @@ export default function CaptureGroupDetailView() {
     return () => window.removeEventListener('beforeunload', warnBeforeUnload)
   }, [hasUnsavedAnnotation])
   const focusTargetId = focus ? captureGroupFocusTargetIds[focus] : null
-  const fallbackFocusTargetId =
-    focus === 'review' || focus === 'cleaning' ? captureGroupReviewFallbackTargetId : null
+  const fallbackFocusTargetId = focus === 'review' ? captureGroupReviewFallbackTargetId : null
   const viewRows = useMemo(() => createGroupViewRows(data.group), [data.group])
   const selectedView = useMemo<GroupViewRow | null>(
     () => viewRows.find((view) => view.stream?.clip_asset_id === data.selectedClipAssetId) ?? null,
@@ -364,7 +363,7 @@ export default function CaptureGroupDetailView() {
 
   const renderHumanLabelPanel = () => {
     if (!data.group) return null
-    if (taskDestination?.focus === 'review' || taskDestination?.focus === 'cleaning') {
+    if (taskDestination?.focus === 'review') {
       return (
         <CaptureGroupReviewPanel
           projectId={projectId}

@@ -313,7 +313,7 @@ describe('CaptureGroup Review and event cleaning', () => {
         reviewed_camera_numbers: [2],
         return_camera_numbers: [1],
       })
-      expect((await screen.findAllByText('待修改')).length).toBeGreaterThan(0)
+      expect((await screen.findAllByText('待返工')).length).toBeGreaterThan(0)
       expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
       expect(screen.getAllByText('复核 · 已退回').length).toBeGreaterThan(0)
       expect(screen.getAllByText('请补充动作结束位置。').length).toBeGreaterThan(0)

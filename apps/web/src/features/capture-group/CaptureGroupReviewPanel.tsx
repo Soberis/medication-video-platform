@@ -130,15 +130,14 @@ export function CaptureGroupReviewPanel({
     (number) => cameraViewState(number) === 'EXCLUDED',
   )
   const totalApprovedSegments = cameraViews.reduce((sum, view) => {
-    return sum + (view.included ? view.segments.length : 0)
+    const isIncluded = 'included' in view ? view.included : view.state === 'SUBMITTED'
+    return sum + (isIncluded ? view.segments.length : 0)
   }, 0)
   const cameraSummaryDetail = [
     includedCameraNumbers.length > 0
       ? `机位 ${includedCameraNumbers.join('、')} 参与（共 ${totalApprovedSegments} 段动作）`
       : null,
-    excludedCameraNumbers.length > 0
-      ? `机位 ${excludedCameraNumbers.join('、')} 已排除`
-      : null,
+    excludedCameraNumbers.length > 0 ? `机位 ${excludedCameraNumbers.join('、')} 已排除` : null,
   ]
     .filter(Boolean)
     .join('，')
@@ -538,7 +537,7 @@ export function CaptureGroupReviewPanel({
             <Alert
               type="warning"
               showIcon
-              title="当前修订已退回，任务已回到待修改"
+              title="当前修订已退回，任务已回到待返工"
               description="复核结果来自服务端；不可对同一修订重复决定。"
             />
           ) : !canReview && !review ? (
