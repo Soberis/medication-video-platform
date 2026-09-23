@@ -123,6 +123,26 @@ export function CaptureGroupReviewPanel({
   const [isCompletedDetailOpen, setIsCompletedDetailOpen] = useState(false)
   const [expandedReviewCameras, setExpandedReviewCameras] = useState<number[]>([])
 
+  const includedCameraNumbers = cameraNumbers.filter(
+    (number) => cameraViewState(number) === 'SUBMITTED',
+  )
+  const excludedCameraNumbers = cameraNumbers.filter(
+    (number) => cameraViewState(number) === 'EXCLUDED',
+  )
+  const totalApprovedSegments = cameraViews.reduce((sum, view) => {
+    return sum + (view.included ? view.segments.length : 0)
+  }, 0)
+  const cameraSummaryDetail = [
+    includedCameraNumbers.length > 0
+      ? `机位 ${includedCameraNumbers.join('、')} 参与（共 ${totalApprovedSegments} 段动作）`
+      : null,
+    excludedCameraNumbers.length > 0
+      ? `机位 ${excludedCameraNumbers.join('、')} 已排除`
+      : null,
+  ]
+    .filter(Boolean)
+    .join('，')
+
   function updateReturnCamera(cameraNumber: number, shouldReturn: boolean) {
     setReturnCameraSelection((selection) => {
       const current =
@@ -304,7 +324,7 @@ export function CaptureGroupReviewPanel({
             <StatusIndicator tone="success">人工复核已通过</StatusIndicator>
             <p role="status">
               {group.expected_camera_count > 1
-                ? `合组 ${group.received_camera_count} 个已接收机位的独立标注均已完成复核，可返回视频列表直接选择导出。`
+                ? `合组 ${group.received_camera_count} 个已接收机位的独立标注均已完成复核${cameraSummaryDetail ? `：${cameraSummaryDetail}` : ''}。可返回视频列表直接选择导出。`
                 : '标注已完成人工复核确认，可返回视频列表选择导出。'}
             </p>
           </div>
@@ -328,7 +348,59 @@ export function CaptureGroupReviewPanel({
           </div>
         </div>
       ) : null}
-      {revision && cameraNumbers.length > 0 ? (
+      {revision && canReview && !review ? (
+        <div className="capture-group-review-sticky-header">
+          <div className="capture-group-review-summary-row">
+            <div className="capture-group-review-summary-info">
+              <StatusIndicator tone={allCamerasSubmittedOrExcluded ? 'success' : 'warning'}>
+                {allCamerasSubmittedOrExcluded
+                  ? `全组 ${cameraNumbers.length} 个机位标注已完备`
+                  : `机位待就绪（剩余 ${unsubmittedCameraNumbers.length} 个机位待处理）`}
+              </StatusIndicator>
+            </div>
+            <div className="capture-group-review-actions" aria-label="人工标签复核操作">
+              <Tooltip
+                title={
+                  !allCamerasSubmittedOrExcluded
+                    ? `机位 ${unsubmittedCameraNumbers.join('、')} 尚未处于提交或排除状态`
+                    : undefined
+                }
+              >
+                <span>
+                  <Button
+                    type="primary"
+                    loading={reviewingDecision === 'APPROVED'}
+                    disabled={reviewingDecision !== null || !canFinalizeReview}
+                    onClick={() => openReview('APPROVED')}
+                  >
+                    通过复核
+                  </Button>
+                </span>
+              </Tooltip>
+              <Button
+                danger
+                loading={reviewingDecision === 'REJECTED'}
+                disabled={
+                  reviewingDecision !== null ||
+                  !canFinalizeReview ||
+                  returnCameraNumbers.length === 0
+                }
+                onClick={() => openReview('REJECTED')}
+              >
+                退回修改
+              </Button>
+            </div>
+          </div>
+          {!canFinalizeReview && !allCamerasSubmittedOrExcluded && (
+            <div className="capture-group-review-disabled-hint" role="status">
+              <span className="hint-warning">
+                机位 {unsubmittedCameraNumbers.join('、')} 尚未提交或排除标注。
+              </span>
+            </div>
+          )}
+        </div>
+      ) : null}
+      {revision && cameraNumbers.length > 0 && (!isReviewApproved || isCompletedDetailOpen) ? (
         <section className="capture-group-review-camera-lanes" aria-label="逐机位复核">
           <div className="capture-group-review-subheading">
             <div>
@@ -336,9 +408,11 @@ export function CaptureGroupReviewPanel({
             </div>
             <span>{cameraNumbers.length} 个机位</span>
           </div>
-          <p className="form-hint">
-            逐机位查看动作段；需要修改时勾选“退回此机位”，然后点击“退回修改”。
-          </p>
+          {!isReviewApproved ? (
+            <p className="form-hint">
+              逐机位查看动作段；需要修改时勾选“退回此机位”，然后点击“退回修改”。
+            </p>
+          ) : null}
           {cameraNumbers.map((cameraNumber) => {
             const cameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
             const state = cameraViewState(cameraNumber)
@@ -371,10 +445,9 @@ export function CaptureGroupReviewPanel({
                     </StatusIndicator>
                   </div>
                   <div className="capture-group-review-camera-lane-controls">
-                    {canReturnLane ? (
+                    {canReturnLane && canReview && !review ? (
                       <Checkbox
                         checked={returnCameraNumbers.includes(cameraNumber)}
-                        disabled={!canReview || Boolean(review)}
                         onChange={(event) => updateReturnCamera(cameraNumber, event.target.checked)}
                       >
                         退回此机位
@@ -461,6 +534,20 @@ export function CaptureGroupReviewPanel({
         <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
       ) : !isReviewApproved || isCompletedDetailOpen ? (
         <div id="capture-group-review-details">
+          {review?.decision === 'REJECTED' ? (
+            <Alert
+              type="warning"
+              showIcon
+              title="当前修订已退回，任务已回到待修改"
+              description="复核结果来自服务端；不可对同一修订重复决定。"
+            />
+          ) : !canReview && !review ? (
+            <p className="capture-group-review-permission" role="status">
+              <CircleAlert aria-hidden="true" size={16} strokeWidth={1.8} />
+              当前账号没有该修订的复核权限；仍可查看服务端返回的审阅事实。
+            </p>
+          ) : null}
+
           <div className="capture-group-review-boundary" role="status">
             <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
             <div>
@@ -506,66 +593,6 @@ export function CaptureGroupReviewPanel({
               ]}
             />
           </div>
-
-          {canReview ? (
-            <div className="capture-group-review-actions-container">
-              <div className="capture-group-review-actions" aria-label="人工标签复核操作">
-                <Tooltip
-                  title={
-                    !allCamerasSubmittedOrExcluded
-                      ? `机位 ${unsubmittedCameraNumbers.join('、')} 尚未处于提交或排除状态`
-                      : undefined
-                  }
-                >
-                  <span>
-                    <Button
-                      type="primary"
-                      loading={reviewingDecision === 'APPROVED'}
-                      disabled={reviewingDecision !== null || !canFinalizeReview}
-                      onClick={() => openReview('APPROVED')}
-                    >
-                      通过复核
-                    </Button>
-                  </span>
-                </Tooltip>
-                <Button
-                  danger
-                  loading={reviewingDecision === 'REJECTED'}
-                  disabled={
-                    reviewingDecision !== null ||
-                    !canFinalizeReview ||
-                    returnCameraNumbers.length === 0
-                  }
-                  onClick={() => openReview('REJECTED')}
-                >
-                  退回修改
-                </Button>
-              </div>
-              {!canFinalizeReview && !allCamerasSubmittedOrExcluded && (
-                <div className="capture-group-review-disabled-hint" role="status">
-                  <span className="hint-warning">
-                    机位 {unsubmittedCameraNumbers.join('、')} 尚未提交或排除标注。
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : review ? (
-            <Alert
-              type={review.decision === 'APPROVED' ? 'success' : 'warning'}
-              showIcon
-              title={
-                review.decision === 'APPROVED'
-                  ? '当前修订已完成复核'
-                  : '当前修订已退回，任务已回到待修改'
-              }
-              description="复核结果来自服务端；不可对同一修订重复决定。"
-            />
-          ) : (
-            <p className="capture-group-review-permission" role="status">
-              <CircleAlert aria-hidden="true" size={16} strokeWidth={1.8} />
-              当前账号没有该修订的复核权限；仍可查看服务端返回的审阅事实。
-            </p>
-          )}
 
           {isReviewApproved ? (
             <details className="capture-group-review-detail-disclosure">

@@ -129,8 +129,8 @@
   background: var(--app-color-surface);
   color: var(--app-color-foreground);
   font-weight: var(--app-font-weight-medium);
-  border-color: var(--app-color-border-subtle);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-color: color-mix(in srgb, var(--app-color-primary) 32%, var(--app-color-border-subtle));
+  box-shadow: 0 1px 3px rgba(49, 94, 155, 0.08);
 }
 
 .capture-group-compare-item:focus-visible {
@@ -1609,6 +1609,34 @@
   margin: 0;
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-helper);
+}
+
+.capture-group-review-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: grid;
+  gap: var(--app-space-8);
+  padding: var(--app-space-12) var(--app-space-16);
+  background: var(--app-color-surface);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.capture-group-review-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-12);
+  flex-wrap: wrap;
+}
+
+.capture-group-review-summary-info {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  font-size: var(--app-font-size-body);
 }
 
 .capture-group-review-section .ant-alert {
