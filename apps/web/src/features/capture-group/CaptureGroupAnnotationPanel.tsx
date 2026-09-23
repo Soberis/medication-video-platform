@@ -525,7 +525,7 @@ export function CaptureGroupAnnotationPanel({
       : task && task.status !== 'ASSIGNED'
         ? `当前任务状态：${formatTaskStatus(task)}。`
         : task && allCameraViewsResolved && !task.can_submit
-          ? '当前账号不允许提交整组修订；请查看服务端任务状态与项目权限。'
+          ? '当前账号暂无提交整组修订权限。'
           : activeCameraView?.state === 'SUBMITTED' && activeCameraView.segments.length === 0
             ? '当前机位已提交但没有动作段；请重新编辑补充至少一段动作，或排除本机位。'
             : activeCameraView?.state === 'SUBMITTED'
@@ -898,7 +898,7 @@ export function CaptureGroupAnnotationPanel({
           type="error"
           showIcon
           title="采集输入已变化，当前标注任务已过期。"
-          description="为避免把旧采集快照写入新事实，排除、恢复和提交暂时停止。重新准备任务会重新绑定最新采集输入；原视频、AI 候选、手部检测事实和历史记录不会被删除，重新加载后仍可继续核对可用候选。"
+          description="采集源数据已更新。重新准备任务将加载最新输入与 AI 候选，原视频与历史记录完整保留。"
           action={
             canPrepareTask ? (
               <Button
@@ -1125,8 +1125,7 @@ export function CaptureGroupAnnotationPanel({
           {/* --- 当前机位操作区 --- */}
           <div className="capture-group-camera-action-bar">
             <p className="capture-group-camera-disposition-hint">
-              提交本机位标注后，本机位的动作区间进入本次整组修订；导出时只在这些区间关联已有的手部检测样本。排除本机位后，本次修订、复核和导出都不纳入该机位的动作与对应手部样本；原视频、AI
-              候选、检测事实和历史记录会保留，取消排除后仍需重新确认。
+              已提交机位的动作区间将纳入整组修订；无可确认动作时请选择排除（原视频与 AI 候选不受影响，可随时取消排除）。
             </p>
             {activeCameraView?.state === 'EXCLUDED' ? (
               <div className="camera-action-state-banner is-excluded">

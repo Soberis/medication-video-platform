@@ -153,9 +153,7 @@ export function CaptureGroupReviewPanel({
     modal.confirm({
       title: approved ? '通过人工标签复核' : '退回人工标签修订',
       content: approved ? (
-        <p>
-          确认本次标注内容正确？管理员可确认自己提交的标注，无需另一人复核。确认后仍须通过当前规则和来源检查才能导出。
-        </p>
+        <p>确认本次多机位动作标注正确并予以通过？通过后将生成正式版本用于后续质检与导出。</p>
       ) : (
         <div className="capture-group-review-confirmation">
           <p>退回这次人工标签修订，选中的机位将重新开放编辑，其余机位结果保留。</p>
@@ -546,7 +544,7 @@ export function CaptureGroupReviewPanel({
               {!canFinalizeReview && !allCamerasSubmittedOrExcluded && (
                 <div className="capture-group-review-disabled-hint" role="status">
                   <span className="hint-warning">
-                    阻断：机位 {unsubmittedCameraNumbers.join('、')} 尚未提交或排除标注。
+                    机位 {unsubmittedCameraNumbers.join('、')} 尚未提交或排除标注。
                   </span>
                 </div>
               )}

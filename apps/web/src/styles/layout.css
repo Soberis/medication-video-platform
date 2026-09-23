@@ -71,9 +71,9 @@
   height: 28px;
   min-width: 28px;
   border-radius: var(--app-radius-sm);
-  background: var(--app-color-primary, #315e9b);
-  color: #ffffff;
-  box-shadow: 0 1px 3px rgba(49, 94, 155, 0.25);
+  background: var(--app-color-primary);
+  color: var(--app-color-primary-foreground);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--app-color-primary) 25%, transparent);
 }
 
 .app-brand-copy {

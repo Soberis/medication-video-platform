@@ -84,9 +84,9 @@
   align-items: center;
   gap: var(--app-space-4);
   padding: 3px;
-  background: var(--app-color-surface-muted, #f4f5f7);
-  border: 1px solid var(--app-color-border-subtle, #e5e7eb);
-  border-radius: var(--app-radius-md, 8px);
+  background: var(--app-color-surface-muted);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
@@ -173,27 +173,27 @@
 }
 
 .capture-group-compare-badge.is-submitted {
-  background: #f6ffed;
-  color: #389e0d;
-  border: 1px solid #b7eb8f;
+  background: var(--app-color-success-surface);
+  color: var(--app-color-success);
+  border: 1px solid color-mix(in srgb, var(--app-color-success) 25%, transparent);
 }
 
 .capture-group-compare-badge.is-draft {
-  background: #e6f4ff;
-  color: #0958d9;
-  border: 1px solid #91caff;
+  background: var(--app-color-information-surface);
+  color: var(--app-color-information);
+  border: 1px solid color-mix(in srgb, var(--app-color-information) 25%, transparent);
 }
 
 .capture-group-compare-badge.is-excluded {
-  background: #fff1f0;
-  color: #cf1322;
-  border: 1px solid #ffa39e;
+  background: var(--app-color-destructive-surface);
+  color: var(--app-color-destructive);
+  border: 1px solid color-mix(in srgb, var(--app-color-destructive) 25%, transparent);
 }
 
 .capture-group-compare-badge.is-pending {
-  background: var(--app-color-surface, #ffffff);
-  color: var(--app-color-foreground-muted, #8c8c8c);
-  border: 1px solid var(--app-color-border-subtle, #e8e8e8);
+  background: var(--app-color-surface);
+  color: var(--app-color-foreground-muted);
+  border: 1px solid var(--app-color-border-subtle);
 }
 
 .capture-group-compare-item.is-excluded {
@@ -201,7 +201,7 @@
 }
 
 .capture-group-compare-item.is-excluded .capture-group-compare-name {
-  color: var(--app-color-foreground-muted, #8c8c8c);
+  color: var(--app-color-foreground-muted);
   text-decoration: line-through;
 }
 
@@ -1002,7 +1002,7 @@
 }
 
 .capture-group-timeline-slice.has-overlap-warning {
-  outline: 2px solid var(--app-color-warning, #faad14);
+  outline: 2px solid var(--app-color-warning);
   outline-offset: -1px;
   animation: overlap-pulse 1.5s ease-in-out 2;
 }
@@ -1288,15 +1288,15 @@
 }
 
 .camera-action-state-banner.is-submitted {
-  background: #f6ffed;
-  border: 1px solid #b7eb8f;
-  color: #237804;
+  background: var(--app-color-success-surface);
+  border: 1px solid color-mix(in srgb, var(--app-color-success) 25%, transparent);
+  color: var(--app-color-success);
 }
 
 .camera-action-state-banner.is-submitted p {
   margin: 2px 0 0;
   font-size: 12px;
-  color: #389e0d;
+  color: var(--app-color-foreground-secondary);
 }
 
 .camera-action-state-banner.is-excluded {
@@ -1328,6 +1328,11 @@
   gap: var(--app-space-8);
   margin-bottom: var(--app-space-8);
   flex-wrap: wrap;
+}
+
+.camera-exclusion-reason-shortcuts .ant-tag {
+  cursor: pointer;
+  user-select: none;
 }
 
 .camera-exclusion-reason-label {
@@ -1815,7 +1820,7 @@
 }
 
 .capture-group-review-disabled-hint .hint-warning {
-  color: var(--app-color-warning, #b45309);
+  color: var(--app-color-warning);
 }
 
 .capture-group-cleaning-summary {

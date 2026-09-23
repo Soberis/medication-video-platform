@@ -47,15 +47,13 @@ export function CameraExclusionModal({
       width={480}
     >
       <p className="form-hint camera-exclusion-scope-hint">
-        排除只作用于本次标注修订：该机位的动作标注和对应手部样本不进入本次复核与导出；原视频、AI
-        候选、手部检测事实和历史记录完整保留。取消排除后会回到待处理，AI
-        候选会重新作为待核对内容显示，仍需重新确认标注。
+        排除仅作用于本次标注修订，该机位不进入本次复核与导出；原视频与 AI 候选完整保留，取消排除后可重新核对。
       </p>
       {hasAnnotationToDiscard ? (
         <p className="form-hint camera-exclusion-draft-warning">
           {isSubmitted
-            ? '当前机位已提交人工标注；确认排除后，本次修订不再纳入这些动作和对应手部样本，恢复后需重新确认。'
-            : '当前机位有未提交草稿；确认排除后，动作段和备注会清空。'}
+            ? '当前机位已提交人工标注；确认排除后，本次修订不再纳入这些动作，恢复后需重新确认。'
+            : '当前机位有未提交草稿；确认排除后，临时动作段与备注将被清空。'}
         </p>
       ) : null}
       <div className="camera-exclusion-reason-shortcuts">
@@ -64,7 +62,6 @@ export function CameraExclusionModal({
           {COMMON_EXCLUSION_REASONS.map((item) => (
             <Tag
               key={item}
-              style={{ cursor: 'pointer', userSelect: 'none' }}
               color={reason === item ? 'blue' : undefined}
               onClick={() => onReasonChange(item)}
             >
