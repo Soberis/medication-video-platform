@@ -44,15 +44,6 @@ export interface ClipAssetPlaybackGrant {
   expires_at: string
   content_type: string
 }
-
-export interface MediaProbeJob {
-  media_job_id: string
-  project_id: string
-  clip_asset_id: string
-  job_type: 'MEDIA_PROBE'
-  status: 'REQUESTED' | 'QUEUED' | 'RUNNING' | 'RETRY_WAIT' | 'SUCCEEDED' | 'FAILED'
-}
-
 export interface HandPoseJob {
   ai_job_id: string
   project_id: string
@@ -218,40 +209,6 @@ export async function authorizeClipAssetPlayback(
     },
   )
   if (response.ok) return (await response.json()) as ClipAssetPlaybackGrant
-  throw await toCatalogError(response)
-}
-
-export async function requestClipAssetMediaProbe(projectId: string, clipAssetId: string) {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/media-probe-jobs`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Idempotency-Key': crypto.randomUUID(),
-        ...csrfHeaders(),
-      },
-      cache: 'no-store',
-    },
-  )
-  if (response.ok) return (await response.json()) as MediaProbeJob
-  throw await toCatalogError(response)
-}
-
-export async function requestHandPoseCandidates(projectId: string, videoId: string) {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/videos/${encodeURIComponent(videoId)}/hand-pose-detections`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Idempotency-Key': crypto.randomUUID(),
-        ...csrfHeaders(),
-      },
-      cache: 'no-store',
-    },
-  )
-  if (response.ok) return (await response.json()) as HandPoseJob
   throw await toCatalogError(response)
 }
 

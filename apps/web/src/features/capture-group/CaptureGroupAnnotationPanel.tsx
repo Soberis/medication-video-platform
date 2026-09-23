@@ -1,5 +1,5 @@
 import { App as AntdApp, Alert, Button, Input, Tooltip } from 'antd'
-import { Check, ChevronDown, ChevronUp, CircleAlert, Plus } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, CircleAlert, Plus, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
@@ -333,13 +333,13 @@ export function CaptureGroupAnnotationPanel({
   const groupSubmissionHint = canSubmitGroupRevision
     ? '全部机位已确认'
     : hasUnsavedDraftChanges
-      ? '当前机位有未提交修改，请先提交本机位标注。'
+      ? '当前机位有未提交修改，请先提交机位。'
       : hasSubmittedCameraWithoutSegments
-        ? `机位 ${submittedCameraNumbersWithoutSegments.join('、')} 已提交但没有动作段；请重新编辑补充，或排除本机位。`
+        ? `机位 ${submittedCameraNumbersWithoutSegments.join('、')} 已提交但没有动作段；请重新编辑补充，或排除机位。`
         : !allCameraViewsResolved
           ? `已确认 ${resolvedCameraCount} / ${allCameraNumbers.length} 路机位`
           : !hasParticipatingSubmittedCamera
-            ? '至少保留一个机位提交本机位标注。'
+            ? '至少保留一个机位提交。'
             : ''
   const canUseCurrentPlaybackTime = Boolean(
     canEditActiveCamera && currentPlaybackTimeMs !== null && Number.isFinite(currentPlaybackTimeMs),
@@ -525,13 +525,13 @@ export function CaptureGroupAnnotationPanel({
         : task && allCameraViewsResolved && !task.can_submit
           ? '当前账号暂无提交整组修订权限。'
           : activeCameraView?.state === 'SUBMITTED' && activeCameraView.segments.length === 0
-            ? '当前机位已提交但没有动作段；请重新编辑补充至少一段动作，或排除本机位。'
+            ? '当前机位已提交但没有动作段；请重新编辑补充至少一段动作，或排除机位。'
             : activeCameraView?.state === 'SUBMITTED'
-              ? '当前机位已提交；如需修改，请先重新编辑本机位。'
+              ? '当前机位已提交；如需修改，请先重新编辑。'
               : activeCameraView?.state === 'EXCLUDED'
                 ? '当前机位已排除；如需继续编辑，请先取消排除。'
                 : activeCameraNumber !== null && !activeClipAssetId
-                  ? '当前机位缺少可编辑视频；请排除本机位。'
+                  ? '当前机位缺少可编辑视频；请排除机位。'
                   : ''
 
   function getCameraDraft(cameraNumber: number) {
@@ -553,10 +553,43 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
+  async function prepareAnnotationTask(): Promise<AnnotationTask> {
+    let prepared = task
+    if (!prepared) {
+      if (!canPrepareTask || !assigneeActorId.trim()) {
+        throw new Error('当前账号没有项目标注权限。')
+      }
+      try {
+        prepared = await assignCaptureGroupHumanLabelTask(
+          projectId,
+          captureGroupId,
+          assigneeActorId,
+        )
+        onTaskChange(prepared)
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        if (errMsg.includes('已有标注任务') || errMsg.includes('ALREADY_EXISTS')) {
+          await onRefresh()
+          const taskList = await listAnnotationTasks(projectId).catch(() => null)
+          const found = taskList?.items.find(
+            (candidate) => candidate.capture_group_id === captureGroupId,
+          )
+          if (found) {
+            onTaskChange(found)
+            return found
+          }
+        }
+        throw err
+      }
+    }
+    return prepared
+  }
+
   async function saveCameraView(
     cameraNumber: number,
     nextState: 'PENDING' | 'DRAFT' | 'SUBMITTED' | 'EXCLUDED',
     reason = '',
+    customSegments?: DraftAnnotationSegment[],
   ) {
     if (
       isSubmittingRevisionRef.current ||
@@ -575,9 +608,10 @@ export function CaptureGroupAnnotationPanel({
     const targetClipAssetId = targetRow?.stream?.clip_asset_id ?? null
     const isActiveCamera = cameraNumber === activeCameraNumber
     const draft = getCameraDraft(cameraNumber)
+    const effectiveSegments = customSegments ?? draft.segments
 
     if (nextState !== 'EXCLUDED' && nextState !== 'PENDING' && !targetClipAssetId) {
-      void message.warning('此机位没有可用视频，只能排除本机位。')
+      void message.warning('此机位没有可用视频，只能排除机位。')
       return false
     }
     if (nextState === 'EXCLUDED' && !reason.trim()) {
@@ -585,11 +619,11 @@ export function CaptureGroupAnnotationPanel({
       return false
     }
     if (nextState === 'SUBMITTED') {
-      if (draft.segments.length === 0) {
-        void message.warning('请至少添加一段动作后再提交本机位标注；没有可确认动作时请排除本机位。')
+      if (effectiveSegments.length === 0) {
+        void message.warning('请至少添加一段动作后再提交机位；没有可确认动作时请排除机位。')
         return false
       }
-      const errors = validateSegments(draft.segments, isActiveCamera ? totalDurationMs : null)
+      const errors = validateSegments(effectiveSegments, isActiveCamera ? totalDurationMs : null)
       if (Object.keys(errors).length) {
         setSegmentErrors(errors)
         setCollapseState((previous) => ({
@@ -623,7 +657,7 @@ export function CaptureGroupAnnotationPanel({
           segments:
             nextState === 'EXCLUDED' || nextState === 'PENDING'
               ? []
-              : draft.segments.map((segment) => ({
+              : effectiveSegments.map((segment) => ({
                   segment_id: segment.segment_id ?? crypto.randomUUID(),
                   start_ms: segment.start_ms,
                   end_ms: segment.end_ms,
@@ -644,13 +678,13 @@ export function CaptureGroupAnnotationPanel({
       const isReediting = nextState === 'DRAFT' && targetCameraView?.state === 'SUBMITTED'
       void message.success(
         nextState === 'SUBMITTED'
-          ? `机位 ${cameraNumber} 标注已提交。`
+          ? `机位 ${cameraNumber} 已提交。`
           : nextState === 'EXCLUDED'
-            ? `机位 ${cameraNumber} 已排除，本次不纳入标注。`
+            ? `机位 ${cameraNumber} 已排除。`
             : nextState === 'PENDING'
-              ? `机位 ${cameraNumber} 已取消排除并恢复为待处理，请重新确认标注。`
+              ? `机位 ${cameraNumber} 已取消排除。`
               : isReediting
-                ? `机位 ${cameraNumber} 已恢复为草稿，可继续编辑。`
+                ? `机位 ${cameraNumber} 已恢复为草稿。`
                 : `机位 ${cameraNumber} 草稿已保存。`,
       )
       return true
@@ -841,36 +875,50 @@ export function CaptureGroupAnnotationPanel({
     setDraftSegments([...sourceSegments, createDraftSegment(undefined, nextStart, nextEnd)])
   }
 
-  async function prepareAnnotationTask(): Promise<AnnotationTask> {
-    let prepared = task
-    if (!prepared) {
-      if (!canPrepareTask || !assigneeActorId.trim()) {
-        throw new Error('当前账号没有项目标注权限。')
-      }
-      try {
-        prepared = await assignCaptureGroupHumanLabelTask(
-          projectId,
-          captureGroupId,
-          assigneeActorId,
-        )
-        onTaskChange(prepared)
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err)
-        if (errMsg.includes('已有标注任务') || errMsg.includes('ALREADY_EXISTS')) {
-          await onRefresh()
-          const taskList = await listAnnotationTasks(projectId).catch(() => null)
-          const found = taskList?.items.find(
-            (candidate) => candidate.capture_group_id === captureGroupId,
-          )
-          if (found) {
-            onTaskChange(found)
-            return found
-          }
-        }
-        throw err
-      }
+  const handleLoadAiCandidates = useCallback(() => {
+    if (validCandidates.length === 0 || !canEditActiveCamera) return
+    beginDraftEdit()
+    const newSegments = validCandidates.map((candidate) =>
+      createDraftSegment(
+        {
+          start_ms: candidate.start_ms,
+          end_ms: candidate.end_ms,
+          label: candidate.action_label,
+        },
+        0,
+        1000,
+        { source_candidate_ids: [candidate.action_candidate_id] },
+      ),
+    )
+    setDraftSegments(newSegments)
+    setSegmentErrors({})
+    void message.success(`已载入 ${newSegments.length} 段 AI 候选。`)
+  }, [
+    validCandidates,
+    canEditActiveCamera,
+    beginDraftEdit,
+    setDraftSegments,
+    message,
+  ])
+
+  async function handleLoadAiCandidatesFromSubmitted() {
+    if (activeCameraNumber === null || validCandidates.length === 0) return
+    const newSegments = validCandidates.map((candidate) =>
+      createDraftSegment(
+        {
+          start_ms: candidate.start_ms,
+          end_ms: candidate.end_ms,
+          label: candidate.action_label,
+        },
+        0,
+        1000,
+        { source_candidate_ids: [candidate.action_candidate_id] },
+      ),
+    )
+    const ok = await saveCameraView(activeCameraNumber, 'DRAFT', '', newSegments)
+    if (ok) {
+      void message.success(`已载入 ${newSegments.length} 段 AI 候选并恢复为草稿。`)
     }
-    return prepared
   }
 
   async function refreshAnnotationTask() {
@@ -1036,30 +1084,12 @@ export function CaptureGroupAnnotationPanel({
                     {isAllCollapsed ? '展开全部' : '折叠全部'}
                   </Button>
                 )}
-                {activeCameraView?.state === 'SUBMITTED' ? (
-                  <Button
-                    size="small"
-                    htmlType="button"
-                    disabled={
-                      isSubmittingRevision ||
-                      inputVersionConflict ||
-                      contextChanged ||
-                      !canUpdateCameraViews()
-                    }
-                    loading={isSubmittingRevision}
-                    onClick={() =>
-                      activeCameraNumber !== null &&
-                      void saveCameraView(activeCameraNumber, 'DRAFT')
-                    }
-                  >
-                    重新编辑本机位
-                  </Button>
-                ) : (
+                {activeCameraView?.state === 'SUBMITTED' ? null : (
                   <Button
                     type="primary"
                     size="small"
                     htmlType="button"
-                    aria-label="提交本机位标注"
+                    aria-label="提交机位"
                     className="capture-group-sticky-submit-btn"
                     disabled={visibleDraftSegments.length === 0 || !canEditActiveCamera}
                     loading={isSubmittingRevision}
@@ -1070,7 +1100,7 @@ export function CaptureGroupAnnotationPanel({
                       }
                     }}
                   >
-                    提交本机位标注
+                    提交机位
                   </Button>
                 )}
               </div>
@@ -1124,44 +1154,59 @@ export function CaptureGroupAnnotationPanel({
             )
           })}
           <div className="capture-group-annotation-form-actions">
-            <Button
-              type="dashed"
-              block
-              icon={<Plus size={14} />}
-              htmlType="button"
-              className="capture-group-add-segment-btn"
-              disabled={!canEditActiveCamera}
-              onClick={handleAddSegment}
-            >
-              添加时间段
-            </Button>
-            <label className="capture-group-note-field">
-              <span>机位 {activeCameraNumber ?? '—'} 标注备注（可选）</span>
-              <Input.TextArea
-                value={annotationNote}
-                placeholder="输入修订说明或异常情况..."
+            <div className="capture-group-segment-btn-row">
+              <Button
+                type="dashed"
+                icon={<Plus size={14} />}
+                htmlType="button"
+                className="capture-group-add-segment-btn"
                 disabled={!canEditActiveCamera}
-                maxLength={1000}
-                autoSize={{ minRows: 1, maxRows: 3 }}
-                onChange={(event) => {
-                  beginDraftEdit()
-                  setAnnotationNote(event.target.value)
-                }}
-              />
-            </label>
+                onClick={handleAddSegment}
+              >
+                添加时间段
+              </Button>
+              {canEditActiveCamera && validCandidates.length > 0 ? (
+                <Button
+                  type="default"
+                  icon={<Sparkles size={14} strokeWidth={2} />}
+                  htmlType="button"
+                  className="capture-group-load-ai-btn"
+                  onClick={handleLoadAiCandidates}
+                >
+                  载入 AI ({validCandidates.length})
+                </Button>
+              ) : null}
+            </div>
+            {canEditActiveCamera || annotationNote.trim() ? (
+              <label className="capture-group-note-field">
+                <span>机位 {activeCameraNumber ?? '—'} 标注备注（可选）</span>
+                <Input.TextArea
+                  value={annotationNote}
+                  placeholder="输入修订说明或异常情况..."
+                  disabled={!canEditActiveCamera}
+                  maxLength={1000}
+                  autoSize={{ minRows: 1, maxRows: 3 }}
+                  onChange={(event) => {
+                    beginDraftEdit()
+                    setAnnotationNote(event.target.value)
+                  }}
+                />
+              </label>
+            ) : null}
           </div>
 
           {/* --- 当前机位操作区 --- */}
           <div className="capture-group-camera-action-bar">
-            <p className="capture-group-camera-disposition-hint">
-              已提交机位的动作区间将纳入整组修订；无可确认动作时请选择排除（原视频与 AI
-              候选不受影响，可随时取消排除）。
-            </p>
             {activeCameraView?.state === 'EXCLUDED' ? (
               <div className="camera-action-state-banner is-excluded">
                 <div className="camera-action-state-info">
-                  <strong>本机位已排除（本次不纳入标注）</strong>
-                  <p>{activeCameraView.exclusion_reason || '未记录排除原因'}</p>
+                  <span className="camera-action-state-title">
+                    <CircleAlert size={14} strokeWidth={2} className="camera-action-alert-icon" />
+                    <strong>本机位已排除</strong>
+                    {activeCameraView.exclusion_reason ? (
+                      <span className="camera-action-count-text">（{activeCameraView.exclusion_reason}）</span>
+                    ) : null}
+                  </span>
                 </div>
                 <Button
                   type="primary"
@@ -1180,12 +1225,13 @@ export function CaptureGroupAnnotationPanel({
             ) : activeCameraView?.state === 'SUBMITTED' && task?.status === 'ASSIGNED' ? (
               <div className="camera-action-state-banner is-submitted">
                 <div className="camera-action-state-info">
-                  <strong>本机位标注已提交</strong>
-                  <p>
-                    {activeCameraView.segments.length > 0
-                      ? `已确认 ${activeCameraView.segments.length} 段动作；如需修改，请先重新编辑本机位。`
-                      : '当前没有动作段，请重新编辑补充，或排除本机位。'}
-                  </p>
+                  <span className="camera-action-state-title">
+                    <Check size={14} strokeWidth={2.5} className="camera-action-check-icon" />
+                    <strong>本机位已提交</strong>
+                    <span className="camera-action-count-text">
+                      （{activeCameraView.segments.length > 0 ? `${activeCameraView.segments.length}段动作` : '无动作段'}）
+                    </span>
+                  </span>
                 </div>
                 <div className="camera-action-banner-actions">
                   <Button
@@ -1203,12 +1249,34 @@ export function CaptureGroupAnnotationPanel({
                       void saveCameraView(activeCameraNumber, 'DRAFT')
                     }
                   >
-                    重新编辑本机位
+                    重新编辑
                   </Button>
+                  {validCandidates.length > 0 ? (
+                    <Button
+                      size="small"
+                      icon={<Sparkles size={13} strokeWidth={2} />}
+                      htmlType="button"
+                      className="capture-group-banner-ai-btn"
+                      aria-label={`载入 AI 候选 (${validCandidates.length})`}
+                      title={`载入 ${validCandidates.length} 段 AI 动作候选`}
+                      disabled={
+                        isSubmittingRevision ||
+                        inputVersionConflict ||
+                        contextChanged ||
+                        !canUpdateCameraViews()
+                      }
+                      loading={isSubmittingRevision}
+                      onClick={() => void handleLoadAiCandidatesFromSubmitted()}
+                    >
+                      载入 AI
+                    </Button>
+                  ) : null}
                   <Button
                     danger
                     htmlType="button"
                     size="small"
+                    aria-label="排除机位"
+                    title="排除当前机位"
                     disabled={
                       isSubmittingRevision || inputVersionConflict || !canUpdateCameraViews()
                     }
@@ -1217,7 +1285,7 @@ export function CaptureGroupAnnotationPanel({
                       setIsExcludeModalOpen(true)
                     }}
                   >
-                    排除本机位
+                    排除
                   </Button>
                 </div>
               </div>
@@ -1238,7 +1306,7 @@ export function CaptureGroupAnnotationPanel({
                     setIsExcludeModalOpen(true)
                   }}
                 >
-                  排除本机位
+                  排除机位
                 </Button>
               </div>
             )}

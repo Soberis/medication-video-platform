@@ -212,11 +212,6 @@ record AnnotationCameraViewSegmentRequest(@NotNull UUID segmentId, @jakarta.vali
 		@NotNull @jakarta.validation.constraints.Size(max = 200) java.util.List<@NotNull UUID> sourceCandidateIds) {
 }
 
-record AnnotationSegmentRequest(@jakarta.validation.constraints.Min(0) long startMs,
-		@jakarta.validation.constraints.Min(1) long endMs,
-		@NotBlank @jakarta.validation.constraints.Size(max = 64) @Pattern(regexp = "^[^\\p{Cc}]+$") String label) {
-}
-
 record AnnotationReviewRequest(@NotNull AnnotationReviewDecision decision,
 		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote,
 		@jakarta.validation.constraints.Size(

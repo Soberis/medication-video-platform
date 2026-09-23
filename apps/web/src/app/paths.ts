@@ -6,8 +6,6 @@ export const paths = {
   captureGroups: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/capture-groups`,
   captureGroup: (projectId: string, captureGroupId: string) =>
     `/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}`,
-  annotationTasks: (projectId: string) =>
-    `/projects/${encodeURIComponent(projectId)}/annotation-tasks`,
   captureGroupFocus,
   memberships: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/members`,
   annotationLabelLibrary: () => '/settings/annotation-label-library',

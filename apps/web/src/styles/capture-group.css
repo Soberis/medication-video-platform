@@ -20,7 +20,7 @@
 .capture-group-workspace {
   display: grid;
   grid-template-areas: 'video action';
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -1231,8 +1231,36 @@
   width: 100%;
 }
 
+.capture-group-annotation-form-actions > .capture-group-segment-btn-row,
 .capture-group-annotation-form-actions > .capture-group-add-segment-btn {
   grid-column: 1 / -1;
+}
+
+.capture-group-segment-btn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  width: 100%;
+}
+
+.capture-group-segment-btn-row > .capture-group-add-segment-btn {
+  flex: 1;
+}
+
+.capture-group-load-ai-btn,
+.capture-group-banner-ai-btn {
+  flex-shrink: 0;
+  color: var(--app-color-primary) !important;
+  border-color: color-mix(in srgb, var(--app-color-primary) 32%, var(--app-color-border-subtle)) !important;
+  background: color-mix(in srgb, var(--app-color-primary) 6%, transparent) !important;
+  font-weight: var(--app-font-weight-medium);
+}
+
+.capture-group-load-ai-btn:hover:not(:disabled),
+.capture-group-banner-ai-btn:hover:not(:disabled) {
+  color: var(--app-color-primary-hover) !important;
+  border-color: var(--app-color-primary) !important;
+  background: color-mix(in srgb, var(--app-color-primary) 12%, transparent) !important;
 }
 
 .capture-group-note-field {
@@ -1253,17 +1281,10 @@
 
 /* --- Active Camera Action Bar --- */
 .capture-group-camera-action-bar {
-  margin-top: var(--app-space-16);
-  padding-top: var(--app-space-12);
+  margin-top: var(--app-space-12);
+  padding: 10px 0;
   border-top: 1px solid var(--app-color-border-subtle);
-}
-
-.capture-group-camera-disposition-hint {
-  margin: 0 0 var(--app-space-8);
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body);
-  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--app-color-border-subtle);
 }
 
 .camera-action-button-group {
@@ -1279,12 +1300,25 @@
   justify-content: space-between;
   gap: var(--app-space-12);
   min-width: 0;
-  padding: 10px 14px;
-  border-radius: var(--app-radius-md);
+  flex-wrap: wrap;
+  row-gap: var(--app-space-8);
+  padding: 2px 0;
 }
 
 .camera-action-state-info {
+  display: flex;
+  align-items: center;
   min-width: 0;
+  flex-shrink: 1;
+}
+
+.camera-action-state-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .camera-action-banner-actions {
@@ -1295,28 +1329,45 @@
 }
 
 .camera-action-state-banner.is-submitted {
-  background: var(--app-color-success-surface);
-  border: 1px solid color-mix(in srgb, var(--app-color-success) 25%, transparent);
-  color: var(--app-color-success);
+  background: transparent;
+  border: none;
+  color: var(--app-color-foreground);
 }
 
-.camera-action-state-banner.is-submitted p {
-  margin: 2px 0 0;
+.camera-action-state-banner.is-submitted .camera-action-check-icon {
+  color: var(--app-color-success);
+  flex-shrink: 0;
+}
+
+.camera-action-state-banner.is-submitted strong {
+  font-weight: 600;
+  color: var(--app-color-foreground);
+}
+
+.camera-action-state-banner.is-submitted .camera-action-count-text {
   font-size: 12px;
-  color: var(--app-color-foreground-secondary);
+  color: var(--app-color-foreground-muted);
 }
 
 .camera-action-state-banner.is-excluded {
-  background: var(--app-color-surface-muted);
-  border: 1px solid var(--app-color-border-subtle);
+  background: transparent;
+  border: none;
+  color: var(--app-color-foreground);
+}
+
+.camera-action-state-banner.is-excluded .camera-action-alert-icon {
+  color: var(--app-color-warning);
+  flex-shrink: 0;
+}
+
+.camera-action-state-banner.is-excluded strong {
+  font-weight: 600;
   color: var(--app-color-foreground-secondary);
 }
 
-.camera-action-state-banner.is-excluded p {
-  margin: 2px 0 0;
+.camera-action-state-banner.is-excluded .camera-action-count-text {
   font-size: 12px;
   color: var(--app-color-foreground-muted);
-  overflow-wrap: anywhere;
 }
 
 .camera-exclusion-scope-hint,

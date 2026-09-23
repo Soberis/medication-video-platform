@@ -33,11 +33,11 @@ export function CameraExclusionModal({
 }: CameraExclusionModalProps) {
   return (
     <Modal
-      title={`排除本机位 ${cameraNumber ?? ''}`}
+      title={`排除机位 ${cameraNumber ?? ''}`}
       open={open}
       onOk={() => void onConfirm()}
       onCancel={onCancel}
-      okText="确认排除本机位"
+      okText="确认排除"
       okButtonProps={{
         danger: true,
         loading: isSubmitting,

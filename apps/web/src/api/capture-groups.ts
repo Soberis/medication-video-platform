@@ -14,8 +14,6 @@ export type CaptureGroupQualityResult =
   | 'NEEDS_REVIEW'
   | 'REJECTED'
 
-export type CaptureGroupQualityCommandResult = Exclude<CaptureGroupQualityResult, 'UNREVIEWED'>
-
 export interface CaptureGroupSnapshotMember {
   camera_channel_id: string
   camera_index: number
@@ -138,10 +136,6 @@ export interface CaptureGroupQualityReview {
   confirmed_view_set_sha256: string | null
 }
 
-export interface CaptureGroupQualityReviewHistory {
-  items: CaptureGroupQualityReview[]
-}
-
 export class CaptureGroupApiError extends Error {
   readonly errorCode: string
   readonly status: number
@@ -152,13 +146,6 @@ export class CaptureGroupApiError extends Error {
     this.errorCode = errorCode
     this.status = status
   }
-}
-
-export function isCaptureGroupQualityForbidden(error: unknown) {
-  return (
-    error instanceof CaptureGroupApiError &&
-    (error.status === 403 || error.errorCode === 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED')
-  )
 }
 
 const errorMessages: Record<string, string> = {
@@ -233,51 +220,6 @@ export async function finalizeCaptureGroupReceipt(projectId: string, captureGrou
     cache: 'no-store',
   })
   if (response.ok) return (await response.json()) as CaptureGroup
-  throw await toCaptureGroupError(response)
-}
-
-export function getCaptureGroupQualityReview(
-  projectId: string,
-  captureGroupId: string,
-  signal?: AbortSignal,
-) {
-  return readJson<CaptureGroupQualityReview>(
-    `${path(projectId, captureGroupId)}/quality-review`,
-    signal,
-  )
-}
-
-export function listCaptureGroupQualityReviewHistory(
-  projectId: string,
-  captureGroupId: string,
-  signal?: AbortSignal,
-) {
-  return readJson<CaptureGroupQualityReviewHistory>(
-    `${path(projectId, captureGroupId)}/quality-review/history`,
-    signal,
-  )
-}
-
-export async function recordCaptureGroupQualityReview(
-  projectId: string,
-  captureGroupId: string,
-  result: CaptureGroupQualityCommandResult,
-  reason: string,
-  expectedRevision: number,
-) {
-  const response = await fetch(`${path(projectId, captureGroupId)}/quality-review`, {
-    method: 'PUT',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'Idempotency-Key': crypto.randomUUID(),
-      'X-Request-Id': crypto.randomUUID(),
-      ...csrfHeaders(),
-    },
-    body: JSON.stringify({ result, reason: reason.trim(), expected_revision: expectedRevision }),
-    cache: 'no-store',
-  })
-  if (response.ok) return (await response.json()) as CaptureGroupQualityReview
   throw await toCaptureGroupError(response)
 }
 
