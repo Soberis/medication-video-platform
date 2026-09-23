@@ -368,6 +368,7 @@ export function CaptureGroupReviewPanel({
                 <span>
                   <Button
                     type="primary"
+                    icon={<Check size={14} strokeWidth={2.2} />}
                     loading={reviewingDecision === 'APPROVED'}
                     disabled={reviewingDecision !== null || !canFinalizeReview}
                     onClick={() => openReview('APPROVED')}
@@ -401,17 +402,6 @@ export function CaptureGroupReviewPanel({
       ) : null}
       {revision && cameraNumbers.length > 0 && (!isReviewApproved || isCompletedDetailOpen) ? (
         <section className="capture-group-review-camera-lanes" aria-label="逐机位复核">
-          <div className="capture-group-review-subheading">
-            <div>
-              <h3>机位复核</h3>
-            </div>
-            <span>{cameraNumbers.length} 个机位</span>
-          </div>
-          {!isReviewApproved ? (
-            <p className="form-hint">
-              逐机位查看动作段；需要修改时勾选“退回此机位”，然后点击“退回修改”。
-            </p>
-          ) : null}
           {cameraNumbers.map((cameraNumber) => {
             const cameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
             const state = cameraViewState(cameraNumber)
@@ -429,8 +419,11 @@ export function CaptureGroupReviewPanel({
             return (
               <article className="capture-group-review-camera-lane" key={cameraNumber}>
                 <div className="capture-group-review-camera-lane-heading">
-                  <div>
+                  <div className="capture-group-review-lane-identity">
                     <h4>机位 {cameraNumber}</h4>
+                    <span className="capture-group-review-segment-count">
+                      {segmentCount ? `${segmentCount} 段` : '无动作段'}
+                    </span>
                     <StatusIndicator
                       tone={
                         state === 'SUBMITTED'
@@ -455,10 +448,6 @@ export function CaptureGroupReviewPanel({
                   </div>
                 </div>
                 <div className="capture-group-review-camera-segments-block">
-                  <div className="capture-group-review-camera-segments-heading">
-                    <span>动作段</span>
-                    <span>{segmentCount ? `${segmentCount} 段` : '无动作段'}</span>
-                  </div>
                   {segmentCount ? (
                     <>
                       <ol className="capture-group-review-camera-segments">
@@ -547,60 +536,58 @@ export function CaptureGroupReviewPanel({
             </p>
           ) : null}
 
-          <div className="capture-group-review-boundary" role="status">
-            <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
-            <div>
-              <strong>人工复核操作</strong>
-              <span>检测结果仅供人工参考，不作为正式标注或质量结论。</span>
+          <details className="capture-group-review-detail-disclosure">
+            <summary>查看复核事实与版本快照</summary>
+            <div className="capture-group-review-detail-content">
+              <div className="capture-group-review-boundary" role="status">
+                <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
+                <div>
+                  <strong>人工复核操作</strong>
+                  <span>检测结果仅供人工参考，不作为正式标注或质量结论。</span>
+                </div>
+              </div>
+
+              <div className="capture-group-review-facts">
+                <MetadataList
+                  ariaLabel="人工标签复核核心事实"
+                  items={[
+                    {
+                      id: 'review-group',
+                      label: '采集记录',
+                      value: group.capture_group_key ?? group.capture_group_id,
+                    },
+                    {
+                      id: 'review-revision',
+                      label: '修订',
+                      value: `第 ${revision.revision_number} 次正式修订`,
+                    },
+                    {
+                      id: 'review-cameras',
+                      label: '复核机位数',
+                      value: cameraNumbers.length,
+                    },
+                    {
+                      id: 'review-input-version',
+                      label: '确认输入版本',
+                      value: (
+                        <span title={inputVersion ?? undefined}>
+                          {formatInputVersion(inputVersion)}
+                        </span>
+                      ),
+                    },
+                    {
+                      id: 'review-submitted',
+                      label: '提交事实',
+                      value: revision.submitted_by,
+                      secondary: formatDateTime(revision.submitted_at),
+                    },
+                  ]}
+                />
+              </div>
+
+              {evidenceAndHistory}
             </div>
-          </div>
-
-          <div className="capture-group-review-facts">
-            <MetadataList
-              ariaLabel="人工标签复核核心事实"
-              items={[
-                {
-                  id: 'review-group',
-                  label: '采集记录',
-                  value: group.capture_group_key ?? group.capture_group_id,
-                },
-                {
-                  id: 'review-revision',
-                  label: '修订',
-                  value: `第 ${revision.revision_number} 次正式修订`,
-                },
-                {
-                  id: 'review-cameras',
-                  label: '复核机位数',
-                  value: cameraNumbers.length,
-                },
-                {
-                  id: 'review-input-version',
-                  label: '确认输入版本',
-                  value: (
-                    <span title={inputVersion ?? undefined}>
-                      {formatInputVersion(inputVersion)}
-                    </span>
-                  ),
-                },
-                {
-                  id: 'review-submitted',
-                  label: '提交事实',
-                  value: revision.submitted_by,
-                  secondary: formatDateTime(revision.submitted_at),
-                },
-              ]}
-            />
-          </div>
-
-          {isReviewApproved ? (
-            <details className="capture-group-review-detail-disclosure">
-              <summary>查看已确认机位、检测证据与修订历史</summary>
-              <div className="capture-group-review-detail-content">{evidenceAndHistory}</div>
-            </details>
-          ) : (
-            evidenceAndHistory
-          )}
+          </details>
 
           {cleaning ? <CaptureGroupCleaningCheck cleaning={cleaning} schema={schema} /> : null}
         </div>

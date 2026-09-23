@@ -13,7 +13,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     exclude: ['**/node_modules/**', '**/dist/**', '**/.git/**', 'e2e/**'],
-    maxWorkers: 4,
+    maxWorkers: 2,
     root: fileURLToPath(new URL('.', import.meta.url)),
     setupFiles: ['./src/test/setup.ts'],
     testTimeout: 20_000,

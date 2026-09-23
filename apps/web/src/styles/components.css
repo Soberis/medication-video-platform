@@ -758,12 +758,7 @@
   align-items: baseline;
   gap: var(--app-space-16);
   min-width: 0;
-  padding-block: var(--app-space-8);
-  border-bottom: 1px solid var(--app-color-border-subtle);
-}
-
-.property-row:last-child {
-  border-bottom: 0;
+  padding-block: var(--app-space-4);
 }
 
 .property-row dt {

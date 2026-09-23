@@ -677,7 +677,11 @@ describe('CaptureGroup annotation workflow', () => {
 
     await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 3000 }))
     const video = await screen.findByLabelText('视频预览')
-    Object.defineProperty(video, 'currentTime', { configurable: true, value: 12.345 })
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => 12.345,
+      set: () => {},
+    })
     fireEvent.loadedMetadata(video)
     fireEvent.timeUpdate(video)
 
@@ -690,12 +694,14 @@ describe('CaptureGroup annotation workflow', () => {
       name: '第 1 个时间段：使用当前时间作为结束',
     })
     await waitFor(() => expect(startButton).not.toBeDisabled())
-    fireEvent.click(startButton)
     await waitFor(() => {
+      fireEvent.timeUpdate(video)
+      fireEvent.click(startButton)
       expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(12345)
     })
-    fireEvent.click(endButton)
     await waitFor(() => {
+      fireEvent.timeUpdate(video)
+      fireEvent.click(endButton)
       expect(screen.getByLabelText('结束时间（毫秒）')).toHaveValue(12345)
     })
     expect(

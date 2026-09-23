@@ -1060,7 +1060,7 @@ export function CaptureGroupAnnotationPanel({
                 </h3>
                 {visibleDraftSegments.length > 0 && (
                   <span className="capture-group-annotation-summary-text">
-                    {visibleDraftSegments.length} 段
+                    · {visibleDraftSegments.length} 段动作
                   </span>
                 )}
               </div>
