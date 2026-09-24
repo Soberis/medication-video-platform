@@ -38,7 +38,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - wget --quiet --spider http://localhost:9333/cluster/status
+        - wget --quiet --spider http://localhost:9333/cluster/status && nc -z 127.0.0.1 8333
       interval: 5s
       timeout: 5s
       retries: 24

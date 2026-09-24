@@ -109,7 +109,7 @@ required_host_ports=(
 )
 for required_host_port in "${required_host_ports[@]}"; do
     IFS='|' read -r service_name display_name port <<< "$required_host_port"
-    if tcp_port_in_use "$port"; then
+    if wait_tcp_port_in_use "$port" 8; then
         continue
     fi
 
@@ -118,7 +118,7 @@ for required_host_port in "${required_host_ports[@]}"; do
         echo "Could not recreate $service_name while restoring host port $port." >&2
         exit 1
     fi
-    if ! tcp_port_in_use "$port"; then
+    if ! wait_tcp_port_in_use "$port" 20; then
         echo "$display_name port $port is still unavailable after recreating $service_name." >&2
         exit 1
     fi

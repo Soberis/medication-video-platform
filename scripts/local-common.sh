@@ -51,6 +51,19 @@ tcp_port_in_use() {
     nc -z -w 1 127.0.0.1 "$1" >/dev/null 2>&1
 }
 
+wait_tcp_port_in_use() {
+    local port="$1"
+    local max_wait="${2:-10}"
+    local deadline=$((SECONDS + max_wait))
+    while (( SECONDS < deadline )); do
+        if tcp_port_in_use "$port"; then
+            return 0
+        fi
+        sleep 0.5
+    done
+    return 1
+}
+
 core_api_healthy() {
     local health_uri="$1"
     local response

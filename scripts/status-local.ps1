@@ -25,7 +25,7 @@ function Test-TcpPortInUse {
     $client = [System.Net.Sockets.TcpClient]::new()
     try {
         $connect = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
-        if (-not $connect.AsyncWaitHandle.WaitOne(500)) {
+        if (-not $connect.AsyncWaitHandle.WaitOne(1000)) {
             return $false
         }
         $client.EndConnect($connect)

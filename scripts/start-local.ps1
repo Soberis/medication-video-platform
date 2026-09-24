@@ -41,12 +41,15 @@ function Import-LocalEnvironment {
 }
 
 function Test-TcpPortInUse {
-    param([int]$Port)
+    param(
+        [int]$Port,
+        [int]$TimeoutMs = 1000
+    )
 
     $client = [System.Net.Sockets.TcpClient]::new()
     try {
         $connect = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
-        if (-not $connect.AsyncWaitHandle.WaitOne(500)) {
+        if (-not $connect.AsyncWaitHandle.WaitOne($TimeoutMs)) {
             return $false
         }
         $client.EndConnect($connect)
@@ -58,6 +61,22 @@ function Test-TcpPortInUse {
     finally {
         $client.Dispose()
     }
+}
+
+function Wait-TcpPortInUse {
+    param(
+        [int]$Port,
+        [int]$MaxWaitSeconds = 10
+    )
+
+    $deadline = (Get-Date).AddSeconds($MaxWaitSeconds)
+    do {
+        if (Test-TcpPortInUse -Port $Port -TimeoutMs 1000) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    return $false
 }
 
 function Test-CoreApiHealthy {
@@ -188,11 +207,11 @@ $requiredHostPorts = @(
     @{ Service = 'rabbitmq'; Name = 'RabbitMQ'; Port = $rmqPort }
 )
 foreach ($requiredHostPort in $requiredHostPorts) {
-    if (Test-TcpPortInUse $requiredHostPort.Port) { continue }
+    if (Wait-TcpPortInUse -Port $requiredHostPort.Port -MaxWaitSeconds 8) { continue }
 
     Write-Host "$($requiredHostPort.Name) is healthy in Docker but port $($requiredHostPort.Port) is not published. Recreating only $($requiredHostPort.Service)..." -ForegroundColor Yellow
     & docker compose @composeEnvironmentArguments -f $composeFile up -d --wait --force-recreate $requiredHostPort.Service
-    if ($LASTEXITCODE -ne 0 -or -not (Test-TcpPortInUse $requiredHostPort.Port)) {
+    if ($LASTEXITCODE -ne 0 -or -not (Wait-TcpPortInUse -Port $requiredHostPort.Port -MaxWaitSeconds 20)) {
         throw "$($requiredHostPort.Name) port $($requiredHostPort.Port) is still unavailable after recreating $($requiredHostPort.Service)."
     }
 }

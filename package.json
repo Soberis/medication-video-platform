@@ -20,6 +20,7 @@
     "synthetic-capture-group": "node tools/synthetic-capture-group-client/index.mjs",
     "synthetic-capture-group:test": "node --test tools/synthetic-capture-group-client/*.test.mjs",
     "import-multicam": "node tools/import-local-multicam.mjs",
+    "import-web-video": "node tools/import-web-video-batch.mjs",
     "local-scripts:test": "node --test scripts/*.test.mjs",
     "contract:lint": "redocly lint contracts/openapi/openapi.yaml",
     "api:test": "node scripts/run-bruno.mjs"
