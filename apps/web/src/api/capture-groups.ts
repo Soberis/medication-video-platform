@@ -182,7 +182,7 @@ export function listCaptureGroups(
   projectId: string,
   cursor: string | null = null,
   signal?: AbortSignal,
-  limit = 20,
+  limit = 100,
 ) {
   const query = new URLSearchParams({ limit: String(limit) })
   if (cursor) query.set('cursor', cursor)

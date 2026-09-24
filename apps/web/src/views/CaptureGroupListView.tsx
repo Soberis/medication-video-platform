@@ -135,7 +135,7 @@ export default function CaptureGroupListView() {
         setErrorMessage('')
       }
       try {
-        const groupList = await listCaptureGroups(projectId, cursor, request.controller.signal)
+        const groupList = await listCaptureGroups(projectId, cursor, request.controller.signal, 100)
         if (
           request.controller.signal.aborted ||
           groupRequest.current !== request ||
@@ -624,7 +624,7 @@ export default function CaptureGroupListView() {
                       </span>
                     )}
                   </div>
-                  {!nextCursor && filteredRows.length > pageSize ? (
+                  {filteredRows.length > pageSize ? (
                     <Pagination
                       size="small"
                       current={currentPage}

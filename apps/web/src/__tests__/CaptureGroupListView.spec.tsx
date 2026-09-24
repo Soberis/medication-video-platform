@@ -302,6 +302,32 @@ describe('capture group list view', () => {
     scrollTo.mockRestore()
   })
 
+  it('renders standard pagination directly when records exceed page size even with a cursor', async () => {
+    const groups = Array.from({ length: 15 }, (_, i) =>
+      captureGroupFixture(`60000000-0000-4000-8000-${String(i + 10).padStart(12, '0')}`, {
+        expected: [1],
+        received: [1],
+        receipt: 'COMPLETE',
+        key: `page-test-group-${i + 1}`,
+      }),
+    )
+    stubGroupList(groups, [], { nextCursor: 'cursor-more' })
+    renderView()
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('已显示 15 条采集记录')).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: /page-test-group-1$/ })).toBeInTheDocument()
+    expect(screen.queryByRole('listitem', { name: /page-test-group-11/ })).not.toBeInTheDocument()
+
+    // Pagination numbers are directly accessible, not suppressed by cursor
+    const page2Button = screen.getByTitle('2')
+    expect(page2Button).toBeInTheDocument()
+
+    await user.click(page2Button)
+    expect(await screen.findByRole('listitem', { name: /page-test-group-11/ })).toBeInTheDocument()
+    expect(screen.queryByRole('listitem', { name: /page-test-group-1$/ })).not.toBeInTheDocument()
+  })
+
   it('shows the data-group list while the optional task read is pending', async () => {
     const group = captureGroupFixture('60000000-0000-4000-8000-000000000009', {
       expected: [1],
