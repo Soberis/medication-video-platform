@@ -6,7 +6,7 @@ import AnnotationTaskListView from '@/views/AnnotationTaskListView'
 
 import {
   CaptureGroupApiError,
-  listCaptureGroups,
+  listAllCaptureGroupSummaries,
   type CaptureGroupSummary,
 } from '@/api/capture-groups'
 import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
@@ -26,7 +26,7 @@ import { formatTaskStatus } from '@/features/capture-group/capture-group-detail-
 
 export const CAPTURE_GROUP_LIST_POLL_INTERVAL_MS = 20_000
 
-type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
+type CaptureGroupListLoadingMode = 'initial' | 'refresh' | null
 
 type AnnotationTaskReadState =
   | { status: 'loading' }
@@ -42,8 +42,9 @@ interface ListReturnState {
   projectId: string
   viewer: string
   rows: CaptureGroupSummary[]
-  nextCursor: string | null
   scrollY: number
+  currentPage?: number
+  pageSize?: number
 }
 
 export default function CaptureGroupListView() {
@@ -61,7 +62,6 @@ export default function CaptureGroupListView() {
     savedList?.projectId === projectId && savedList.viewer === viewer ? savedList : null,
   )
   const [rows, setRows] = useState<CaptureGroupSummary[]>(restoredList?.rows ?? [])
-  const [nextCursor, setNextCursor] = useState<string | null>(restoredList?.nextCursor ?? null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>(
     restoredList ? 'success' : 'loading',
   )
@@ -76,8 +76,8 @@ export default function CaptureGroupListView() {
   const [project, setProject] = useState<DataProject | null>(null)
   const currentProject = project?.project_id === projectId ? project : null
   const [searchQuery, setSearchQuery] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [currentPage, setCurrentPage] = useState(restoredList?.currentPage ?? 1)
+  const [pageSize, setPageSize] = useState(restoredList?.pageSize ?? 10)
   const [refreshEpoch, setRefreshEpoch] = useState(0)
   const groupRequest = useRef<RequestToken | null>(null)
   const taskRequest = useRef<RequestToken | null>(null)
@@ -100,13 +100,16 @@ export default function CaptureGroupListView() {
     })
   }, [rows, searchQuery])
 
+  const maxPage = Math.max(1, Math.ceil(filteredRows.length / pageSize))
+  const safeCurrentPage = Math.min(currentPage, maxPage)
+
   const paginatedRows = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize
+    const startIndex = (safeCurrentPage - 1) * pageSize
     return filteredRows.slice(startIndex, startIndex + pageSize)
-  }, [filteredRows, currentPage, pageSize])
+  }, [filteredRows, safeCurrentPage, pageSize])
 
   const loadGroups = useCallback(
-    async (append = false, cursor: string | null = null, silent = false) => {
+    async (silent = false) => {
       groupRequest.current?.controller.abort()
       const request: RequestToken = {
         controller: new AbortController(),
@@ -114,18 +117,13 @@ export default function CaptureGroupListView() {
       }
       groupGeneration.current = request.generation
       groupRequest.current = request
-      const requestMode: CaptureGroupListLoadingMode = append
-        ? 'more'
-        : rowsRef.current.length
-          ? silent
-            ? null
-            : 'refresh'
-          : 'initial'
+      const requestMode: CaptureGroupListLoadingMode = rowsRef.current.length
+        ? silent
+          ? null
+          : 'refresh'
+        : 'initial'
       if (requestMode === 'initial') {
         setRows([])
-        setNextCursor(null)
-        setCurrentPage(1)
-      } else if (append) {
         setCurrentPage(1)
       }
       setLoadingMode(requestMode)
@@ -135,7 +133,10 @@ export default function CaptureGroupListView() {
         setErrorMessage('')
       }
       try {
-        const groupList = await listCaptureGroups(projectId, cursor, request.controller.signal, 100)
+        const loadedRows = await listAllCaptureGroupSummaries(
+          projectId,
+          request.controller.signal,
+        )
         if (
           request.controller.signal.aborted ||
           groupRequest.current !== request ||
@@ -143,19 +144,8 @@ export default function CaptureGroupListView() {
         ) {
           return
         }
-        const loadedRows = groupList.items
-        const existingGroupIds = new Set(rowsRef.current.map((row) => row.capture_group_id))
-        const nextRows = append
-          ? [
-              ...rowsRef.current,
-              ...loadedRows.filter(
-                ({ capture_group_id }) => !existingGroupIds.has(capture_group_id),
-              ),
-            ]
-          : loadedRows
-        rowsRef.current = nextRows
-        setRows(nextRows)
-        setNextCursor(groupList.next_cursor)
+        rowsRef.current = loadedRows
+        setRows(loadedRows)
         setLoadState('success')
       } catch (error) {
         if (
@@ -281,7 +271,7 @@ export default function CaptureGroupListView() {
         timer = null
         if (isDisposed) return
         if (!document.hidden) {
-          await Promise.all([loadGroups(false, null, true), loadTasks(true)])
+          await Promise.all([loadGroups(true), loadTasks(true)])
         }
         if (!isDisposed) {
           scheduleNext()
@@ -293,7 +283,7 @@ export default function CaptureGroupListView() {
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        void Promise.all([loadGroups(false, null, true), loadTasks(true)])
+        void Promise.all([loadGroups(true), loadTasks(true)])
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -314,8 +304,9 @@ export default function CaptureGroupListView() {
         projectId,
         viewer,
         rows,
-        nextCursor,
         scrollY: window.scrollY,
+        currentPage: safeCurrentPage,
+        pageSize,
       }
       void (async () => {
         await navigate(location.pathname + location.search, {
@@ -327,7 +318,7 @@ export default function CaptureGroupListView() {
         })
       })()
     },
-    [location.pathname, location.search, navigate, nextCursor, projectId, rows, viewer],
+    [location.pathname, location.search, navigate, pageSize, projectId, rows, safeCurrentPage, viewer],
   )
 
   return (
@@ -391,7 +382,7 @@ export default function CaptureGroupListView() {
           />
           {activeView === 'all' && rows.length ? (
             <span className="capture-group-list-count">
-              {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
+              共 {rows.length} 条采集记录
             </span>
           ) : null}
         </div>
@@ -607,41 +598,25 @@ export default function CaptureGroupListView() {
                   })}
                 </div>
               )}
-              {nextCursor || filteredRows.length > pageSize ? (
+              {filteredRows.length > pageSize ? (
                 <div className="capture-group-list-pagination">
-                  <div className="capture-group-list-pagination-left">
-                    {nextCursor ? (
-                      <Button
-                        loading={loadingMode === 'more'}
-                        size="small"
-                        onClick={() => void loadGroups(true, nextCursor)}
-                      >
-                        加载更多
-                      </Button>
-                    ) : (
-                      <span className="capture-group-list-pagination-summary">
-                        共 {filteredRows.length} 条
-                      </span>
-                    )}
-                  </div>
-                  {filteredRows.length > pageSize ? (
-                    <Pagination
-                      size="small"
-                      current={currentPage}
-                      pageSize={pageSize}
-                      total={filteredRows.length}
-                      showSizeChanger
-                      pageSizeOptions={['10', '20', '50']}
-                      showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`}
-                      onChange={(page, newPageSize) => {
-                        setCurrentPage(page)
-                        if (newPageSize && newPageSize !== pageSize) {
-                          setPageSize(newPageSize)
-                          setCurrentPage(1)
-                        }
-                      }}
-                    />
-                  ) : null}
+                  <div className="capture-group-list-pagination-left" />
+                  <Pagination
+                    size="small"
+                    current={safeCurrentPage}
+                    pageSize={pageSize}
+                    total={filteredRows.length}
+                    showSizeChanger
+                    pageSizeOptions={['10', '20', '50']}
+                    showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`}
+                    onChange={(page, newPageSize) => {
+                      setCurrentPage(page)
+                      if (newPageSize && newPageSize !== pageSize) {
+                        setPageSize(newPageSize)
+                        setCurrentPage(1)
+                      }
+                    }}
+                  />
                 </div>
               ) : null}
             </section>

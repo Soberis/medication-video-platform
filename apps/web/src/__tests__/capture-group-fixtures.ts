@@ -82,10 +82,11 @@ export function stubGroupList(
           ),
         )
       }
+      const hasCursor = new URL(url, 'http://localhost').searchParams.has('cursor')
       return Promise.resolve(
         jsonResponse({
           items: groups.map(summaryFromGroup),
-          next_cursor: options.nextCursor ?? null,
+          next_cursor: hasCursor ? null : (options.nextCursor ?? null),
         }),
       )
     }

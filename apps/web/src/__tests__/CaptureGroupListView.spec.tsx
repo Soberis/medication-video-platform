@@ -240,7 +240,7 @@ describe('capture group list view', () => {
     expect(within(row).queryByRole('link', { name: /进入/ })).not.toBeInTheDocument()
   })
 
-  it('appends the next cursor page without changing the data-group navigation contract', async () => {
+  it('loads all cursor pages automatically without requiring a load more button', async () => {
     const firstGroup = captureGroupFixture('60000000-0000-4000-8000-000000000007', {
       expected: [1],
       received: [1],
@@ -273,12 +273,10 @@ describe('capture group list view', () => {
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
     const user = userEvent.setup()
 
-    expect(await screen.findByText('已显示 1 条采集记录')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '加载更多' }))
-
-    await waitFor(() => expect(screen.getByText('共 2 条采集记录')).toBeInTheDocument())
-    expect(screen.getByRole('listitem', { name: /second-page-group/ })).toHaveTextContent('待复核')
+    expect(await screen.findByText('共 2 条采集记录')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: /first-page-group/ })).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: /second-page-group/ })).toHaveTextContent('待复核')
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('cursor=cursor-2'))).toBe(
       true,
     )
@@ -302,7 +300,7 @@ describe('capture group list view', () => {
     scrollTo.mockRestore()
   })
 
-  it('renders standard pagination directly when records exceed page size even with a cursor', async () => {
+  it('renders standard pagination directly when records exceed page size', async () => {
     const groups = Array.from({ length: 15 }, (_, i) =>
       captureGroupFixture(`60000000-0000-4000-8000-${String(i + 10).padStart(12, '0')}`, {
         expected: [1],
@@ -315,7 +313,8 @@ describe('capture group list view', () => {
     renderView()
     const user = userEvent.setup()
 
-    expect(await screen.findByText('已显示 15 条采集记录')).toBeInTheDocument()
+    expect(await screen.findByText('共 15 条采集记录')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument()
     expect(screen.getByRole('listitem', { name: /page-test-group-1$/ })).toBeInTheDocument()
     expect(screen.queryByRole('listitem', { name: /page-test-group-11/ })).not.toBeInTheDocument()
 

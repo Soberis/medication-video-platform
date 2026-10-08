@@ -192,15 +192,15 @@ export function listCaptureGroups(
   )
 }
 
-export async function listAllCaptureGroupSummaries(projectId: string, signal: AbortSignal) {
+export async function listAllCaptureGroupSummaries(projectId: string, signal?: AbortSignal) {
   const groups = new Map<string, CaptureGroupSummary>()
   const cursors = new Set<string>()
   let cursor: string | null = null
   // ponytail: read project summaries in memory for P0; use a server candidate query if project size makes this slow.
   do {
-    signal.throwIfAborted()
+    signal?.throwIfAborted()
     const page = await listCaptureGroups(projectId, cursor, signal, 100)
-    signal.throwIfAborted()
+    signal?.throwIfAborted()
     for (const group of page.items) groups.set(group.capture_group_id, group)
     cursor = page.next_cursor
     if (cursor !== null) {
