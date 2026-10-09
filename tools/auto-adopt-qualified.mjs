@@ -27,22 +27,29 @@ SELECT
   cs.capture_group_key,
   cs.project_id,
   cs.created_at,
-  count(distinct ca.candidate_annotation_id) as hand_count,
-  count(distinct ac.action_candidate_id) as action_count,
+  1 as hand_count,
+  1 as action_count,
   t.annotation_task_id,
   t.task_status
 FROM capture_session cs
 JOIN camera_stream s ON cs.capture_session_id = s.capture_session_id
-LEFT JOIN candidate_annotation ca ON s.clip_asset_id = ca.clip_asset_id
-LEFT JOIN ai_job j ON s.clip_asset_id = j.clip_asset_id AND j.algorithm_key = 'QWEN3_5_ACTION'
-LEFT JOIN action_candidate ac ON j.ai_job_id = ac.ai_job_id
 LEFT JOIN annotation_task t ON cs.capture_session_id = t.capture_group_id
 WHERE cs.receipt_state = 'COMPLETE'
   ${projectFilter}
+  AND (t.task_status IS NULL OR t.task_status != 'COMPLETED')
+  AND EXISTS (
+    SELECT 1 FROM ai_job hj 
+    WHERE hj.clip_asset_id = s.clip_asset_id 
+      AND hj.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER' 
+      AND hj.status = 'SUCCEEDED'
+  )
+  AND EXISTS (
+    SELECT 1 FROM ai_job aj 
+    JOIN action_candidate ac ON aj.ai_job_id = ac.ai_job_id
+    WHERE aj.clip_asset_id = s.clip_asset_id 
+      AND aj.algorithm_key = 'QWEN3_5_ACTION'
+  )
 GROUP BY cs.capture_session_id, cs.capture_group_key, cs.project_id, cs.created_at, t.annotation_task_id, t.task_status
-HAVING count(distinct ca.candidate_annotation_id) > 0 
-   AND count(distinct ac.action_candidate_id) > 0
-   AND (t.task_status IS NULL OR t.task_status != 'COMPLETED')
 ORDER BY cs.created_at DESC;
 `
   return runPsqlJson(sql)

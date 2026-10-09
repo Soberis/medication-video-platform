@@ -277,16 +277,26 @@ ORDER BY cs.created_at DESC;
   return runPsqlJson(sql)
 }
 
-export async function retryHandPoseJob(clipAssetId, projectId = '944a19eb-03b1-4b55-98fb-f8e108e23d92') {
-  const sql = `
-BEGIN;
-  DELETE FROM ai_job_idempotency_receipt WHERE ai_job_id IN (SELECT ai_job_id FROM ai_job WHERE clip_asset_id = '${clipAssetId}' AND algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER');
-  DELETE FROM ai_job_attempt WHERE ai_job_id IN (SELECT ai_job_id FROM ai_job WHERE clip_asset_id = '${clipAssetId}' AND algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER');
-  DELETE FROM ai_job WHERE clip_asset_id = '${clipAssetId}' AND algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER';
-COMMIT;
-`
-  runPsql(sql)
-  const url = `http://localhost:8080/api/v1/projects/${projectId}/videos/${clipAssetId}/hand-pose-detections`
+export async function retryHandPoseJob(clipAssetId, projectId) {
+  let effectiveProjectId = projectId
+  if (!effectiveProjectId) {
+    try {
+      const projectLookup = runPsql(`
+        SELECT cs.project_id FROM camera_stream s 
+        JOIN capture_session cs ON s.capture_session_id = cs.capture_session_id 
+        WHERE s.clip_asset_id = '${clipAssetId}' LIMIT 1;
+      `)
+      if (projectLookup && projectLookup.trim()) {
+        effectiveProjectId = projectLookup.trim()
+      }
+    } catch {}
+  }
+  if (!effectiveProjectId) {
+    effectiveProjectId = '944a19eb-03b1-4b55-98fb-f8e108e23d92'
+  }
+
+  // Core API 原生支持 FAILED 状态合法重试与重新排队，不再需要通过原始 SQL 暴力删表
+  const url = `http://localhost:8080/api/v1/projects/${effectiveProjectId}/videos/${clipAssetId}/hand-pose-detections`
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -298,20 +308,21 @@ COMMIT;
   return { ok: res.ok, status: res.status }
 }
 
-export async function retryFailedHandPoseBatch(limit = 20, projectId = '944a19eb-03b1-4b55-98fb-f8e108e23d92') {
+export async function retryFailedHandPoseBatch(limit = 20, projectId) {
+  const whereClause = projectId ? `WHERE cs.project_id = '${projectId}' AND mp.status = 'FAILED'` : `WHERE mp.status = 'FAILED'`
   const sql = `
-SELECT DISTINCT s.clip_asset_id
+SELECT DISTINCT s.clip_asset_id, cs.project_id
 FROM capture_session cs
 JOIN camera_stream s ON cs.capture_session_id = s.capture_session_id
 JOIN ai_job mp ON s.clip_asset_id = mp.clip_asset_id AND mp.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
-WHERE cs.project_id = '${projectId}' AND mp.status = 'FAILED'
+${whereClause}
 LIMIT ${limit};
 `
   const raw = runPsqlJson(sql)
   let count = 0
   for (const item of raw) {
     try {
-      const res = await retryHandPoseJob(item.clip_asset_id, projectId)
+      const res = await retryHandPoseJob(item.clip_asset_id, item.project_id)
       if (res.ok) count++
     } catch {}
   }

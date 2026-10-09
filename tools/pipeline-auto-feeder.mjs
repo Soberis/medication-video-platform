@@ -10,10 +10,10 @@
  * 4. Qwen 动作分割水位守护: 保持 20~35 队列，杜绝排队超时，维持 4090 满负荷
  */
 
-import { adoptCaptureGroup, scanQualifiedCaptureGroups } from './auto-adopt-qualified.mjs';
+import { randomUUID } from 'node:crypto';
 import { isPostgresReady, runPsql } from './lib/db.mjs';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:8080/api/v1';
+const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:8080/api/v1';
 const PROJECT_ID = process.env.PROJECT_ID || '944a19eb-03b1-4b55-98fb-f8e108e23d92';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'synthetic-local-admin-bearer-token-do-not-reuse';
 
@@ -23,14 +23,12 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-import { isPostgresReady, runPsql } from './lib/db.mjs';
-
 /**
  * 检查 Core API 健康状态
  */
 async function isCoreApiReady() {
   try {
-    const res = await fetch('http://localhost:8080/actuator/health', {
+    const res = await fetch('http://127.0.0.1:8080/actuator/health', {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return false;
@@ -141,9 +139,11 @@ async function feedQwenActions(targetQueueSize = 35) {
   const ids = rawFailed.split('\n').filter(Boolean);
   const idList = ids.map(id => `'${id}'`).join(',');
   executeSql(`
+    DELETE FROM candidate_annotation WHERE ai_job_id IN (${idList});
+    DELETE FROM action_candidate WHERE ai_job_id IN (${idList});
+    DELETE FROM ai_job_result_inbox WHERE ai_job_id IN (${idList});
     DELETE FROM ai_job_idempotency_receipt WHERE ai_job_id IN (${idList});
     DELETE FROM ai_job_attempt WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job_result_inbox WHERE ai_job_id IN (${idList});
     DELETE FROM ai_job WHERE ai_job_id IN (${idList});
   `);
 
@@ -154,8 +154,36 @@ async function feedQwenActions(targetQueueSize = 35) {
  * 3. MediaPipe 手部骨骼水位守护与故障自愈 (本地 Worker 流转)
  */
 async function feedMediaPipeHands(batchLimit = 15) {
+  // 1. 自动回收超时僵死任务 (因 Docker 重启或 Worker 中断遗留的 RUNNING 任务)
+  const staleRunningIdsRaw = querySql(`
+    SELECT j.ai_job_id
+    FROM ai_job j
+    WHERE j.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
+      AND j.status = 'RUNNING'
+      AND j.updated_at < NOW() - INTERVAL '3 minutes';
+  `);
+  if (staleRunningIdsRaw) {
+    const staleIds = staleRunningIdsRaw.split('\n').filter(Boolean).map(id => `'${id}'`).join(',');
+    if (staleIds) {
+      executeSql(`
+        DELETE FROM candidate_annotation WHERE ai_job_id IN (${staleIds});
+        DELETE FROM action_candidate WHERE ai_job_id IN (${staleIds});
+        DELETE FROM ai_job_result_inbox WHERE ai_job_id IN (${staleIds});
+        DELETE FROM ai_job_idempotency_receipt WHERE ai_job_id IN (${staleIds});
+        DELETE FROM ai_job_attempt WHERE ai_job_id IN (${staleIds});
+        DELETE FROM ai_job WHERE ai_job_id IN (${staleIds});
+      `);
+    }
+  }
+
+  // 2. 统计真实活跃任务数
   const activeCount = parseInt(
-    querySql(`SELECT count(*) FROM ai_job WHERE algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER' AND status IN ('QUEUED', 'RUNNING');`) || '0',
+    querySql(`
+      SELECT count(*)
+      FROM ai_job
+      WHERE algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
+        AND status IN ('QUEUED', 'RUNNING');
+    `) || '0',
     10
   );
 
@@ -165,52 +193,52 @@ async function feedMediaPipeHands(batchLimit = 15) {
 
   const needCount = Math.min(batchLimit, 15 - activeCount);
 
-  const rawFailed = querySql(`
-    SELECT j.ai_job_id || ',' || j.clip_asset_id
-    FROM ai_job j
-    WHERE j.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
-      AND j.status = 'FAILED'
+  // 3. 找出所有尚未成功完成手部检测的 INGESTED 视频
+  const rawTargetAssets = querySql(`
+    SELECT c.clip_asset_id
+    FROM clip_asset c
+    WHERE c.project_id = '${PROJECT_ID}'
+      AND c.asset_status = 'INGESTED'
       AND NOT EXISTS (
-        SELECT 1 FROM ai_job j2
-        WHERE j2.clip_asset_id = j.clip_asset_id
-          AND j2.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
-          AND j2.status IN ('SUCCEEDED', 'RUNNING', 'QUEUED')
+        SELECT 1 FROM ai_job j
+        WHERE j.clip_asset_id = c.clip_asset_id
+          AND j.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
+          AND j.status IN ('SUCCEEDED', 'RUNNING', 'QUEUED')
       )
-    GROUP BY j.ai_job_id, j.clip_asset_id
     LIMIT ${needCount};
   `);
 
-  if (!rawFailed) {
-    return { fed: 0, reason: '所有手部检测任务均已处理完毕或正在队列中' };
+  if (!rawTargetAssets) {
+    return { fed: 0, reason: '所有视频的手部检测均已完成或正在队列中' };
   }
 
-  const items = rawFailed.split('\n').filter(Boolean).map(l => {
-    const [ai_job_id, clip_asset_id] = l.split(',');
-    return { ai_job_id, clip_asset_id };
-  });
+  const targetAssetIds = rawTargetAssets.split('\n').filter(Boolean);
+  const assetIdList = targetAssetIds.map(id => `'${id}'`).join(',');
 
-  const idList = items.map(i => `'${i.ai_job_id}'`).join(',');
-  executeSql(`
-    DELETE FROM ai_job_idempotency_receipt WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job_attempt WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job_result_inbox WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job WHERE ai_job_id IN (${idList});
-  `);
+  // Core API 原生支持 FAILED 状态合法重试与重新排队，不再需要通过原始 SQL 暴力删表
 
+  // 5. 平稳灌溉投递
   let fedCount = 0;
-  for (const item of items) {
-    const url = `${BASE_URL}/projects/${PROJECT_ID}/videos/${item.clip_asset_id}/hand-pose-detections`;
+  for (const clipAssetId of targetAssetIds) {
+    const url = `${BASE_URL}/projects/${PROJECT_ID}/videos/${clipAssetId}/hand-pose-detections`;
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           ...headers,
-          'Idempotency-Key': `feeder-hand-${item.clip_asset_id}-${Date.now()}`,
+          'Idempotency-Key': `feeder-hand-${clipAssetId}-${Date.now()}`,
           'X-Request-Id': randomUUID(),
         },
       });
-      if (res.ok || res.status === 202) fedCount++;
-    } catch {}
+      if (res.ok || res.status === 202) {
+        fedCount++;
+      } else {
+        const errText = await res.text().catch(() => '');
+        console.error(`[手部骨骼投递未接受] ${clipAssetId}: ${res.status} ${errText}`);
+      }
+    } catch (err) {
+      console.error(`[手部骨骼投递异常] ${clipAssetId}: ${err.message}`);
+    }
   }
 
   return { fed: fedCount, reason: `已平稳补充唤醒 ${fedCount} 个手部骨骼检测任务 (当前活跃: ${activeCount + fedCount})` };
@@ -253,7 +281,7 @@ function getGlobalStatus() {
 
 async function runCycle(iteration = 1) {
   // 基础设施就绪检查 (断线自动重试与自愈)
-  if (!isPostgresReady()) {
+  if (!(await isPostgresReady())) {
     console.log(`[周期 #${iteration} | ${new Date().toLocaleTimeString()}] 等待 PostgreSQL 就绪...`);
     return false;
   }
@@ -268,23 +296,6 @@ async function runCycle(iteration = 1) {
   const handRes = await feedMediaPipeHands(15);
   const qwenRes = await feedQwenActions(35);
 
-  let adoptReason = '无待采纳视频';
-  try {
-    const qualified = scanQualifiedCaptureGroups(PROJECT_ID);
-    if (qualified.length > 0) {
-      let adopted = 0;
-      for (const item of qualified) {
-        try {
-          await adoptCaptureGroup(item.capture_group_id);
-          adopted++;
-        } catch {}
-      }
-      adoptReason = `已自动采纳完成 ${adopted}/${qualified.length} 条`;
-    }
-  } catch (err) {
-    adoptReason = `跳过 (${err.message})`;
-  }
-
   const { assetStats, aiStats } = getGlobalStatus();
 
   console.log(`\n================== [周期 #${iteration} | ${timestamp}] ==================`);
@@ -294,7 +305,6 @@ async function runCycle(iteration = 1) {
   console.log(`[守护动作] 探针: ${probeRes.reason}`);
   console.log(`[守护动作] 手部: ${handRes.reason}`);
   console.log(`[守护动作] Qwen: ${qwenRes.reason}`);
-  console.log(`[守护动作] 采纳: ${adoptReason}`);
   return true;
 }
 

@@ -1,22 +1,30 @@
 import { spawnSync, execSync } from 'node:child_process'
+import net from 'node:net'
 
 export const DOCKER_CONTAINER = process.env.POSTGRES_CONTAINER || 'medication-video-platform-postgres-1'
 export const DB_USER = process.env.POSTGRES_USER || 'medication_local'
 export const DB_NAME = process.env.POSTGRES_DB || 'medication_platform'
+export const DB_PORT = parseInt(process.env.POSTGRES_PORT || '15432', 10)
 
 /**
- * 检查 PostgreSQL 容器是否正常运行且接受连接
+ * 检查 PostgreSQL 端口是否正常监听并接受连接 (极速原生 TCP 探测，0 进程开销，永不 OOM)
  */
-export function isPostgresReady() {
-  try {
-    const out = execSync(
-      `docker exec -i ${DOCKER_CONTAINER} pg_isready -U ${DB_USER} -d ${DB_NAME}`,
-      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], timeout: 3000 }
-    )
-    return out.includes('accepting connections')
-  } catch {
-    return false
-  }
+export async function isPostgresReady() {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host: '127.0.0.1', port: DB_PORT, timeout: 2000 })
+    socket.once('connect', () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.once('timeout', () => {
+      socket.destroy()
+      resolve(false)
+    })
+    socket.once('error', () => {
+      socket.destroy()
+      resolve(false)
+    })
+  })
 }
 
 /**
