@@ -23,7 +23,7 @@ import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { RefreshButton } from '@/components/RefreshButton'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { isHumanAnnotationExportReady, receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
+import { isHumanAnnotationExportReady, receiptStateLabels } from '@/features/capture-group-presentation'
 import { formatDateTime, parseAssetIdentity, shortId } from '@/features/catalog/catalog-presentation'
 import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 import { CopyableText } from '@/components/data/CopyableText'
@@ -639,7 +639,6 @@ export default function CaptureGroupListView() {
                   </div>
                   {paginatedRows.map((group) => {
                     const asset = parseAssetIdentity(group.capture_group_key, group.capture_group_id)
-                    const identity = group.capture_group_key ?? shortId(group.capture_group_id)
                     const identityLabel = `采集记录 · ${asset.platform ? `${asset.platform} · ` : ''}${asset.shortCode}`
                     const eventTime = group.device_time_utc ?? group.created_at
                     const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'

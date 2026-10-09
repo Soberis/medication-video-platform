@@ -1,8 +1,6 @@
 import { Alert, App as AntdApp, Button, Checkbox, Input, Popconfirm, Tooltip } from 'antd'
 import { Check, CircleAlert, Download, FileCheck2, History, Play, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { paths } from '@/app/paths'
 import { triggerHdf5Download } from '@/features/capture-group/export-hdf5'
 
 import {
@@ -56,7 +54,6 @@ export function CaptureGroupReviewPanel({
   activeCameraNumber,
   onSelectCamera,
 }: CaptureGroupReviewPanelProps) {
-  const navigate = useNavigate()
   const { message, modal } = AntdApp.useApp()
   const [reviewingDecision, setReviewingDecision] = useState<
     AnnotationReview['decision'] | 'APPROVED_DOWNLOAD' | null
