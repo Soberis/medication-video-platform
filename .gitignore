@@ -104,3 +104,5 @@ SHA256SUMS.generated
 # Local tooling state (local only, not shared)
 .workbuddy/
 .playwright-cli/
+.agents/
+
