@@ -478,7 +478,7 @@ export function CaptureGroupReviewPanel({
           )}
         </div>
       ) : null}
-      {revision && cameraNumbers.length > 0 && (!isReviewApproved || isCompletedDetailOpen) ? (
+      {revision && cameraNumbers.length > 0 ? (
         <section className="capture-group-review-camera-lanes" aria-label="逐机位复核">
           {cameraNumbers.map((cameraNumber) => {
             const cameraView = cameraViews.find((view) => view.camera_number === cameraNumber)

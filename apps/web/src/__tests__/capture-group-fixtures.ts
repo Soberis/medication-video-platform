@@ -244,6 +244,7 @@ export function stubGroupDetail(
     actionCandidates?: unknown[]
     actionCandidateJob?: unknown | null
     cameraViewUpdateError?: { status: number; errorCode?: string }
+    groupSummaries?: CaptureGroupSummary[]
   },
 ) {
   let taskResponseIndex = 0
@@ -251,7 +252,12 @@ export function stubGroupDetail(
   let cameraViewUpdateErrorUsed = false
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    if (url.includes('/capture-groups?') || url.endsWith('/capture-groups')) {
+      const items = options.groupSummaries ?? [summaryFromGroup(group)]
+      return Promise.resolve(jsonResponse({ items, next_cursor: null }))
+    }
     if (url.endsWith(`/capture-groups/${group.capture_group_id}/receipt/finalize`)) {
+
       if (options.receiptFinalizeError) {
         return Promise.resolve(
           jsonResponse(

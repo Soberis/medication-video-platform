@@ -1,5 +1,5 @@
 import { Alert, Button, Descriptions } from 'antd'
-import { Video } from 'lucide-react'
+import { Play, Video } from 'lucide-react'
 import {
   useEffect,
   useMemo,
@@ -189,6 +189,8 @@ export function PlaybackCard({
             <Button
               className="playback-start-action"
               size="middle"
+              type="primary"
+              icon={<Play size={14} fill="currentColor" />}
               loading={isRequestingPlayback}
               onClick={onStartPlayback}
             >

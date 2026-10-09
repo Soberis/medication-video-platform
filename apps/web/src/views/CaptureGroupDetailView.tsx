@@ -1,5 +1,5 @@
 import { Alert, App as AntdApp, Button, Modal, Popconfirm, Skeleton } from 'antd'
-import { ArrowLeft, Download, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -28,9 +28,9 @@ import {
   captureGroupFocusTargetIds,
   isHumanAnnotationExportReady,
 } from '@/features/capture-group-presentation'
-import { shortId } from '@/features/catalog/catalog-presentation'
+import { parseAssetIdentity, shortId } from '@/features/catalog/catalog-presentation'
 
-import { listAllCaptureGroupSummaries, type CaptureGroup } from '@/api/capture-groups'
+import { listAllCaptureGroupSummaries, type CaptureGroup, type CaptureGroupSummary } from '@/api/capture-groups'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
@@ -82,15 +82,88 @@ export default function CaptureGroupDetailView() {
     }
   }, [captureGroupId, isDownloadingHdf5, message, projectId])
 
+  const [summaries, setSummaries] = useState<CaptureGroupSummary[]>(() => {
+    const stateRows = (location.state as { captureGroupList?: { rows: CaptureGroupSummary[] } })
+      ?.captureGroupList?.rows
+    return Array.isArray(stateRows) ? stateRows : []
+  })
+
+  useEffect(() => {
+    let cancelled = false
+    void listAllCaptureGroupSummaries(projectId)
+      .then((list) => {
+        if (!cancelled && list.length > 0) setSummaries(list)
+      })
+      .catch(() => {
+        // Keep stateRows if already loaded
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
+  const { prevGroup, nextGroup, currentNumber, totalCount } = useMemo(() => {
+    if (!summaries.length) {
+      return { prevGroup: null, nextGroup: null, currentNumber: null, totalCount: 0 }
+    }
+    const index = summaries.findIndex(
+      (item) =>
+        item.capture_group_id === captureGroupId || item.capture_group_key === captureGroupId,
+    )
+    if (index === -1) {
+      return {
+        prevGroup: null,
+        nextGroup: null,
+        currentNumber: null,
+        totalCount: summaries.length,
+      }
+    }
+    return {
+      prevGroup: index > 0 ? summaries[index - 1] : null,
+      nextGroup: index < summaries.length - 1 ? summaries[index + 1] : null,
+      currentNumber: index + 1,
+      totalCount: summaries.length,
+    }
+  }, [captureGroupId, summaries])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey) return
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+
+      const isEditingText =
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement ||
+        document.activeElement?.getAttribute('contenteditable') === 'true'
+      if (isEditingText) return
+
+      if (event.key === 'ArrowLeft' && prevGroup) {
+        event.preventDefault()
+        void navigate(paths.captureGroup(projectId, prevGroup.capture_group_id), {
+          state: location.state,
+        })
+      } else if (event.key === 'ArrowRight' && nextGroup) {
+        event.preventDefault()
+        void navigate(paths.captureGroup(projectId, nextGroup.capture_group_id), {
+          state: location.state,
+        })
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [location.state, navigate, nextGroup, prevGroup, projectId])
+
   const handleQuickDiscardAndNext = useCallback(async () => {
     if (isDiscarding) return
     setIsDiscarding(true)
     try {
-      const list = await listAllCaptureGroupSummaries(projectId)
+      const list = summaries.length > 0 ? summaries : await listAllCaptureGroupSummaries(projectId)
       const currentIndex = list.findIndex(
-        (item) => item.capture_group_id === captureGroupId || item.capture_group_key === captureGroupId,
+        (item) =>
+          item.capture_group_id === captureGroupId || item.capture_group_key === captureGroupId,
       )
-      const nextGroup = list[currentIndex + 1] ?? list[currentIndex - 1] ?? null
+      const nextTarget = list[currentIndex + 1] ?? list[currentIndex - 1] ?? null
 
       const response = await fetch('/api/dev/clean-capture-group', {
         method: 'POST',
@@ -103,8 +176,12 @@ export default function CaptureGroupDetailView() {
       }
 
       void message.success('已废弃并删除该视频，已为您切换至下一条。')
-      if (nextGroup && nextGroup.capture_group_id !== captureGroupId) {
-        void navigate(paths.captureGroup(projectId, nextGroup.capture_group_id), { replace: true })
+      if (nextTarget && nextTarget.capture_group_id !== captureGroupId) {
+        setSummaries((prev) => prev.filter((item) => item.capture_group_id !== captureGroupId))
+        void navigate(paths.captureGroup(projectId, nextTarget.capture_group_id), {
+          replace: true,
+          state: location.state,
+        })
       } else {
         void navigate(paths.captureGroups(projectId), { replace: true })
       }
@@ -113,7 +190,8 @@ export default function CaptureGroupDetailView() {
     } finally {
       setIsDiscarding(false)
     }
-  }, [captureGroupId, isDiscarding, message, navigate, projectId])
+  }, [captureGroupId, isDiscarding, location.state, message, navigate, projectId, summaries])
+
 
   const receiptFinalizeRequest = useRef(false)
   const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
@@ -368,6 +446,12 @@ export default function CaptureGroupDetailView() {
   ])
 
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
+  const rawIdentity = data.group?.capture_group_key ?? captureGroupId
+  const parsedIdentity = useMemo(
+    () => parseAssetIdentity(rawIdentity),
+    [rawIdentity],
+  )
+
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -496,13 +580,25 @@ export default function CaptureGroupDetailView() {
         <span className="breadcrumb-separator" aria-hidden="true">
           /
         </span>
-        <span>{eventIdentity}</span>
+        <span>
+          {parsedIdentity.platform ? `[${parsedIdentity.platform}] ` : ''}
+          {parsedIdentity.shortCode}
+        </span>
       </ProjectBreadcrumb>
       <PageHeader
         className="capture-group-page-header capture-group-detail-header"
         titleId="capture-group-detail-title"
         eyebrow="采集记录"
-        title={eventIdentity}
+        title={
+          parsedIdentity.platform ? (
+            <span className="capture-group-header-title">
+              <span className="export-key-tag">{parsedIdentity.platform}</span>
+              <span className="capture-group-header-code">{parsedIdentity.shortCode}</span>
+            </span>
+          ) : (
+            eventIdentity
+          )
+        }
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
@@ -514,6 +610,57 @@ export default function CaptureGroupDetailView() {
             >
               返回视频列表
             </Button>
+            <div className="capture-group-pipeline-stepper" role="group" aria-label="视频序列导航">
+              <Button
+                icon={<ChevronLeft aria-hidden="true" size={14} strokeWidth={1.8} />}
+                disabled={!prevGroup}
+                title={
+                  prevGroup
+                    ? `上一条 (Alt+←)：${parseAssetIdentity(prevGroup.capture_group_key).shortCode}`
+                    : '已是第一条'
+                }
+                onClick={() => {
+                  if (prevGroup) {
+                    void navigate(paths.captureGroup(projectId, prevGroup.capture_group_id), {
+                      state: location.state,
+                    })
+                  }
+                }}
+              >
+                上一条
+              </Button>
+              {currentNumber && totalCount ? (
+                <span
+                  className="pipeline-stepper-counter"
+                  title={`当前第 ${currentNumber} 条，共 ${totalCount} 条`}
+                >
+                  {currentNumber} / {totalCount}
+                </span>
+              ) : null}
+              <Button
+                disabled={!nextGroup}
+                title={
+                  nextGroup
+                    ? `下一条 (Alt+→)：${parseAssetIdentity(nextGroup.capture_group_key).shortCode}`
+                    : '已是最后一条'
+                }
+                onClick={() => {
+                  if (nextGroup) {
+                    void navigate(paths.captureGroup(projectId, nextGroup.capture_group_id), {
+                      state: location.state,
+                    })
+                  }
+                }}
+              >
+                下一条
+                <ChevronRight
+                  aria-hidden="true"
+                  size={14}
+                  strokeWidth={1.8}
+                  style={{ marginLeft: 4, verticalAlign: 'middle' }}
+                />
+              </Button>
+            </div>
             {!isHumanAnnotationExportReady(humanTask) ? (
               <Popconfirm
                 title="废弃并删除当前视频？"

@@ -24,7 +24,7 @@ import { RefreshButton } from '@/components/RefreshButton'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { isHumanAnnotationExportReady, receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
-import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
+import { formatDateTime, parseAssetIdentity, shortId } from '@/features/catalog/catalog-presentation'
 import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 import { CopyableText } from '@/components/data/CopyableText'
 import { formatTaskStatus } from '@/features/capture-group/capture-group-detail-model'
@@ -638,8 +638,9 @@ export default function CaptureGroupListView() {
                     </div>
                   </div>
                   {paginatedRows.map((group) => {
+                    const asset = parseAssetIdentity(group.capture_group_key, group.capture_group_id)
                     const identity = group.capture_group_key ?? shortId(group.capture_group_id)
-                    const identityLabel = `采集记录 · ${identity}`
+                    const identityLabel = `采集记录 · ${asset.platform ? `${asset.platform} · ` : ''}${asset.shortCode}`
                     const eventTime = group.device_time_utc ?? group.created_at
                     const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
                     const task = tasksByGroupId.get(group.capture_group_id)
@@ -673,11 +674,14 @@ export default function CaptureGroupListView() {
                         <header className="capture-group-list-row-header">
                           <div className="capture-group-list-identity">
                             <Video aria-hidden="true" size={16} strokeWidth={1.8} />
+                            {asset.platform ? (
+                              <span className="export-key-tag">{asset.platform}</span>
+                            ) : null}
                             <strong
                               className="capture-group-list-title"
-                              title={`完整 ID: ${group.capture_group_id}`}
+                              title={`完整标识: ${asset.fullKey}\n完整 ID: ${group.capture_group_id}`}
                             >
-                              {identity}
+                              {asset.shortCode}
                             </strong>
                             <CopyableText
                               value={group.capture_group_id}
@@ -719,7 +723,7 @@ export default function CaptureGroupListView() {
                                 pipelineItem.pipeline_status === 'READY' ? (
                                   isHumanAnnotationExportReady(task) ? (
                                     <StatusIndicator tone="success">
-                                      已核准 · 可导出
+                                      已完成 · 可导出
                                     </StatusIndicator>
                                   ) : (
                                     <>
@@ -755,20 +759,31 @@ export default function CaptureGroupListView() {
                                 )
                               ) : taskReadState.status === 'loading' ? (
                                 <StatusIndicator ariaLive="polite" tone="information">
-                                  任务读取中
+                                  人工任务读取中
                                 </StatusIndicator>
                               ) : taskReadState.status === 'error' ? (
-                                <StatusIndicator ariaLive="polite" tone="warning">
-                                  状态暂不可用
-                                </StatusIndicator>
+                                <>
+                                  <StatusIndicator ariaLive="polite" tone="warning">
+                                    人工任务状态暂不可用
+                                  </StatusIndicator>
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    aria-label="重试读取人工任务"
+                                    onClick={() => void loadTasks()}
+                                  >
+                                    重试
+                                  </Button>
+                                </>
                               ) : task ? (
                                 <StatusIndicator
                                   tone={isHumanAnnotationExportReady(task) ? 'success' : 'information'}
                                 >
                                   {isHumanAnnotationExportReady(task)
-                                    ? '已核准 · 可导出'
+                                    ? '已完成 · 可导出'
                                     : formatTaskStatus(task)}
                                 </StatusIndicator>
+
                               ) : (
                                 <StatusIndicator tone="neutral">
                                   待处理

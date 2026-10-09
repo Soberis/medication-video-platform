@@ -452,4 +452,74 @@ describe('CaptureGroup detail views', () => {
     })
     expect(cam2Btn).not.toHaveAttribute('aria-current')
   })
+
+  it('renders pipeline stepper and supports continuous sequential navigation between videos', async () => {
+    const nextGroupId = '60000000-0000-4000-8000-000000000002'
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    group.capture_group_key = 'xhs-1110058963-c7e6c4667a42142aa7a05047f07011fc54a1a70994fcf2f40a1bdfd3132c3f85'
+
+    const summaries = [
+      {
+        capture_group_id: groupId,
+        capture_group_key: group.capture_group_key,
+        device_time_utc: group.device_time_utc,
+        receipt_state: group.receipt_state,
+        expected_camera_count: 1,
+        received_camera_count: 1,
+        missing_camera_numbers: [],
+        created_at: group.created_at,
+      },
+      {
+        capture_group_id: nextGroupId,
+        capture_group_key: 'douyin-22200589-aabbccddeeff00112233445566778899',
+        device_time_utc: group.device_time_utc,
+        receipt_state: group.receipt_state,
+        expected_camera_count: 1,
+        received_camera_count: 1,
+        missing_camera_numbers: [],
+        created_at: group.created_at,
+      },
+    ]
+
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+      groupSummaries: summaries,
+    })
+
+    const { router } = renderRouter(
+      [
+        {
+          path: '/projects/:projectId/capture-groups/:captureGroupId',
+          element: <CaptureGroupDetailView />,
+        },
+      ],
+      [`/projects/${projectId}/capture-groups/${groupId}`],
+    )
+
+    // Verify formatted title tag
+    expect(await screen.findByText('小红书')).toBeInTheDocument()
+    expect(screen.getByText('1110058963 (c7e6…3f85)')).toBeInTheDocument()
+
+    // Stepper navigation buttons
+    const stepper = await screen.findByRole('group', { name: '视频序列导航' })
+    const prevBtn = within(stepper).getByRole('button', { name: /上一条/ })
+    const nextBtn = within(stepper).getByRole('button', { name: /下一条/ })
+
+    expect(prevBtn).toBeDisabled()
+    expect(nextBtn).toBeEnabled()
+    expect(within(stepper).getByText('1 / 2')).toBeInTheDocument()
+
+    // Click next button
+    await userEvent.setup().click(nextBtn)
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, nextGroupId))
+    })
+  })
 })
+

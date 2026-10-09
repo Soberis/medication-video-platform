@@ -19,77 +19,91 @@
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
-  /* An unauthorised player is an invitation to inspect, not the main work surface.
-   * Keep it compact while retaining enough room for the state and action copy. */
-  min-height: clamp(240px, 36vh, 360px);
+  aspect-ratio: 16 / 9;
+  min-height: 280px;
+  max-height: 520px;
   padding: var(--app-space-24);
-  border: 1px solid var(--app-color-border);
-  border-radius: var(--app-radius-sm);
-  background: var(--app-color-surface-muted);
+  border: 1px solid var(--app-color-media-stage-border, #1f2937);
+  border-radius: var(--app-radius-lg, 10px);
+  background: var(--app-color-media-stage-background, #0b0f17);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   text-align: center;
+  position: relative;
 }
 
 .playback-idle-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: var(--app-radius-md);
-  background: var(--app-color-surface);
-  color: var(--app-color-primary);
-  border: 1px solid var(--app-color-border-subtle);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: transform var(--app-transition-quick, 0.15s ease), background 0.15s ease;
+}
+
+.playback-idle-stage:hover .playback-idle-icon {
+  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--app-color-primary, #315e9b);
 }
 
 .playback-idle-stage.playback-availability-warning .playback-idle-icon {
-  color: var(--app-color-warning);
-  border-color: var(--app-color-warning-surface);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.1);
 }
 
 .playback-idle-stage.playback-availability-error .playback-idle-icon {
-  color: var(--app-color-destructive);
-  border-color: var(--app-color-destructive-surface);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.1);
 }
 
 .playback-idle-copy {
   display: grid;
   justify-items: center;
-  gap: var(--app-space-8);
-  max-width: 560px;
+  gap: var(--app-space-6);
+  max-width: 500px;
 }
 
 .playback-idle-copy strong {
-  color: var(--app-color-foreground);
-  font-size: var(--app-font-size-section-title);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: var(--app-font-weight-semibold);
+  letter-spacing: -0.01em;
 }
 
 .playback-idle-copy > span:last-child {
-  color: var(--app-color-foreground-muted);
+  color: rgba(255, 255, 255, 0.65);
   font-size: var(--app-font-size-body);
   line-height: var(--app-line-height-body-text);
 }
 
 .playback-idle-stage .playback-start-action {
   margin: 0;
+  font-weight: var(--app-font-weight-medium);
 }
 
 .playback-idle-stage.playback-availability-warning {
-  border-color: var(--app-color-warning);
-  background: var(--app-color-warning-surface);
+  border-color: rgba(217, 119, 6, 0.35);
+  background: color-mix(in srgb, #0b0f17 92%, #d97706);
 }
 
 .playback-idle-stage.playback-availability-warning .playback-idle-copy strong {
-  color: var(--app-color-warning);
+  color: #fbbf24;
 }
 
 .playback-idle-stage.playback-availability-error {
-  border-color: var(--app-color-destructive);
-  background: var(--app-color-destructive-surface);
+  border-color: rgba(220, 38, 38, 0.35);
+  background: color-mix(in srgb, #0b0f17 92%, #dc2626);
 }
 
 .playback-idle-stage.playback-availability-error .playback-idle-copy strong {
-  color: var(--app-color-destructive);
+  color: #f87171;
 }
 
 .workbench-panel {

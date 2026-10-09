@@ -332,15 +332,19 @@ export function CaptureGroupAnnotationPanel({
   ).length
   const groupSubmissionHint = canSubmitGroupRevision
     ? '全部机位已确认'
-    : hasUnsavedDraftChanges
-      ? '当前机位有未提交修改，请先提交机位。'
-      : hasSubmittedCameraWithoutSegments
-        ? `机位 ${submittedCameraNumbersWithoutSegments.join('、')} 已提交但没有动作段；请重新编辑补充，或排除机位。`
-        : !allCameraViewsResolved
-          ? `已确认 ${resolvedCameraCount} / ${allCameraNumbers.length} 路机位`
-          : !hasParticipatingSubmittedCamera
-            ? '至少保留一个机位提交。'
-            : ''
+    : task?.status === 'SUBMITTED'
+      ? '整组标注已提交，等待复核。'
+      : task && task.status !== 'ASSIGNED'
+        ? `当前任务状态：${formatTaskStatus(task)}。`
+        : hasUnsavedDraftChanges
+          ? '当前机位有未提交修改，请先提交机位。'
+          : hasSubmittedCameraWithoutSegments
+            ? `机位 ${submittedCameraNumbersWithoutSegments.join('、')} 已提交但没有动作段；请重新编辑补充，或排除机位。`
+            : !allCameraViewsResolved
+              ? `已确认 ${resolvedCameraCount} / ${allCameraNumbers.length} 路机位`
+              : !hasParticipatingSubmittedCamera
+                ? '至少保留一个机位提交。'
+                : ''
   const canUseCurrentPlaybackTime = Boolean(
     canEditActiveCamera && currentPlaybackTimeMs !== null && Number.isFinite(currentPlaybackTimeMs),
   )
@@ -759,6 +763,7 @@ export function CaptureGroupAnnotationPanel({
         ? message.success('整组多机位标注已提交，已进入待复核状态。')
         : message.warning('修订已提交，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
+      await onRefresh().catch(() => undefined)
       recordInputVersionConflict(error)
       void message.error(error instanceof Error ? error.message : '修订暂未提交，请稍后重试。')
     } finally {

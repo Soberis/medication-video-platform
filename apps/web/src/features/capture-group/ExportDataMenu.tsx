@@ -10,7 +10,7 @@ import { listAllCaptureGroupSummaries, type CaptureGroupSummary } from '@/api/ca
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { triggerHdf5Download } from '@/features/capture-group/export-hdf5'
 import { isHumanAnnotationExportReady } from '@/features/capture-group-presentation'
-import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
+import { formatDateTime, parseAssetIdentity, shortId } from '@/features/catalog/catalog-presentation'
 
 export function ExportDataMenu({ projectId }: { projectId: string }) {
   const { message } = AntdApp.useApp()
@@ -226,23 +226,11 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                     key: 'identity',
                     ellipsis: true,
                     render: (_, row) => {
-                      const rawKey = row.capture_group_key ?? shortId(row.capture_group_id)
-                      let platform: string | null = null
-                      let displayId = rawKey
-                      if (rawKey.startsWith('xhs-')) {
-                        platform = '小红书'
-                        displayId = rawKey.slice(4)
-                      } else if (rawKey.startsWith('douyin-')) {
-                        platform = '抖音'
-                        displayId = rawKey.slice(7)
-                      } else if (rawKey.startsWith('youtube-')) {
-                        platform = 'YouTube'
-                        displayId = rawKey.slice(8)
-                      }
+                      const asset = parseAssetIdentity(row.capture_group_key, row.capture_group_id)
                       return (
-                        <span className="capture-group-export-key" title={`完整标识: ${rawKey}`}>
-                          {platform ? <span className="export-key-tag">{platform}</span> : null}
-                          <span className="export-key-code">{displayId}</span>
+                        <span className="capture-group-export-key" title={`完整标识: ${asset.fullKey}`}>
+                          {asset.platform ? <span className="export-key-tag">{asset.platform}</span> : null}
+                          <span className="export-key-code">{asset.shortCode}</span>
                         </span>
                       )
                     },
