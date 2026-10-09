@@ -115,66 +115,16 @@ async function feedQwenActions(targetQueueSize = 35) {
     return { fed: 0, reason: `4090 队列健康 (${activeCount} 任务在处理/排队中)` };
   }
 
-  const needCount = Math.min(targetQueueSize, 35 - activeCount);
-
-  const rawFailed = querySql(`
-    SELECT j.ai_job_id
-    FROM ai_job j
-    WHERE j.algorithm_key = 'QWEN3_5_ACTION'
-      AND j.status = 'FAILED'
-      AND NOT EXISTS (
-        SELECT 1 FROM ai_job j2
-        WHERE j2.clip_asset_id = j.clip_asset_id
-          AND j2.algorithm_key = 'QWEN3_5_ACTION'
-          AND j2.status IN ('SUCCEEDED', 'RUNNING', 'QUEUED')
-      )
-    GROUP BY j.ai_job_id
-    LIMIT ${needCount};
-  `);
-
-  if (!rawFailed) {
-    return { fed: 0, reason: '无积压超时的 Qwen 任务' };
-  }
-
-  const ids = rawFailed.split('\n').filter(Boolean);
-  const idList = ids.map(id => `'${id}'`).join(',');
-  executeSql(`
-    DELETE FROM candidate_annotation WHERE ai_job_id IN (${idList});
-    DELETE FROM action_candidate WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job_result_inbox WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job_idempotency_receipt WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job_attempt WHERE ai_job_id IN (${idList});
-    DELETE FROM ai_job WHERE ai_job_id IN (${idList});
-  `);
-
-  return { fed: ids.length, reason: `已释放 ${ids.length} 个任务，Core API 调度器将在 10 秒内自动推给 4090` };
+  // Qwen 动作分割由 Core API 调度引擎与恢复服务统一管控，不执行跨模块 raw SQL 物理删除
+  return { fed: 0, reason: `4090 队列运行平稳 (${activeCount} 任务在处理/排队中)` };
 }
 
 /**
  * 3. MediaPipe 手部骨骼水位守护与故障自愈 (本地 Worker 流转)
  */
 async function feedMediaPipeHands(batchLimit = 15) {
-  // 1. 自动回收超时僵死任务 (因 Docker 重启或 Worker 中断遗留的 RUNNING 任务)
-  const staleRunningIdsRaw = querySql(`
-    SELECT j.ai_job_id
-    FROM ai_job j
-    WHERE j.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
-      AND j.status = 'RUNNING'
-      AND j.updated_at < NOW() - INTERVAL '3 minutes';
-  `);
-  if (staleRunningIdsRaw) {
-    const staleIds = staleRunningIdsRaw.split('\n').filter(Boolean).map(id => `'${id}'`).join(',');
-    if (staleIds) {
-      executeSql(`
-        DELETE FROM candidate_annotation WHERE ai_job_id IN (${staleIds});
-        DELETE FROM action_candidate WHERE ai_job_id IN (${staleIds});
-        DELETE FROM ai_job_result_inbox WHERE ai_job_id IN (${staleIds});
-        DELETE FROM ai_job_idempotency_receipt WHERE ai_job_id IN (${staleIds});
-        DELETE FROM ai_job_attempt WHERE ai_job_id IN (${staleIds});
-        DELETE FROM ai_job WHERE ai_job_id IN (${staleIds});
-      `);
-    }
-  }
+  // 1. 活跃与排队状态由 Core API AiJobRecoveryService 统一管控租约，避免外部脚本盲目删表破坏长视频推理
+
 
   // 2. 统计真实活跃任务数
   const activeCount = parseInt(
