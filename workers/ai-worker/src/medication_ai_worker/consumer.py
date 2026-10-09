@@ -70,7 +70,10 @@ class AiConsumer:
 
     def _consume_once(self) -> None:
         parameters = pika.URLParameters(self._rabbitmq_url)
-        parameters.heartbeat = 60
+        # Disable AMQP heartbeat (0) so RabbitMQ does not drop the TCP connection
+        # while CPU-intensive MediaPipe inference blocks Python's main thread.
+        # Health and liveness are monitored independently via Core API HTTP LeaseMonitor.
+        parameters.heartbeat = 0
         parameters.blocked_connection_timeout = 30
         connection = pika.BlockingConnection(parameters)
         try:
