@@ -31,10 +31,7 @@ describe('capture group list view', () => {
     })
     const outsideId = '60000000-0000-4000-8000-000000000099'
     stubGroupList([loaded], [groupTask(outsideId, true)], { nextCursor: 'more' })
-    renderView()
-    const user = userEvent.setup()
-    await user.click(await screen.findByRole('combobox', { name: '视频视图' }))
-    await user.click(await screen.findByText('待标注'))
+    renderView(`${paths.captureGroups(projectId)}?view=assigned`)
     const taskRow = await screen.findByRole('listitem', { name: /待标注/ })
     expect(taskRow).toHaveTextContent('60000000')
     expect(within(taskRow).getByRole('link', { name: /标注/ })).toHaveAttribute(
@@ -547,6 +544,112 @@ describe('capture group list view', () => {
     expect(screen.getByText('group-two')).toBeInTheDocument()
 
     vi.useRealTimers()
+  })
+
+  it('displays AI pipeline status indicators, filters by invalid view, and triggers batch clean', async () => {
+    const readyGroup = captureGroupFixture('60000000-0000-4000-8000-000000000011', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'ready-video',
+    })
+    const invalidGroup = captureGroupFixture('60000000-0000-4000-8000-000000000012', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'invalid-video',
+    })
+
+    stubGroupList([readyGroup, invalidGroup], [])
+    const baseFetch = globalThis.fetch
+    const cleanMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true, deletedCount: 1 }))
+    const retryMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true, retriedCount: 1 }))
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        if (url.includes('/api/dev/pipeline-status')) {
+          return Promise.resolve(
+            jsonResponse({
+              ok: true,
+              stats: {
+                total: 2,
+                ready: 1,
+                processing: 0,
+                invalid: 1,
+                noHand: 1,
+                failed: 0,
+                pending: 0,
+              },
+              items: {
+                [readyGroup.capture_group_id]: {
+                  pipeline_status: 'READY',
+                  mp_status: 'SUCCEEDED',
+                  mp_hand_result: 'HAND_DETECTED',
+                  qw_status: 'SUCCEEDED',
+                  action_candidate_count: 3,
+                },
+                [invalidGroup.capture_group_id]: {
+                  pipeline_status: 'NO_HAND',
+                  mp_status: 'SUCCEEDED',
+                  mp_hand_result: 'NO_HAND_DETECTED',
+                  qw_status: 'SUCCEEDED',
+                  action_candidate_count: 0,
+                },
+              },
+            }),
+          )
+        }
+        if (url.includes('/api/dev/clean-invalid-videos')) {
+          return cleanMock()
+        }
+        if (url.includes('/api/dev/retry-failed-hand-poses')) {
+          return retryMock()
+        }
+        return baseFetch(input, init)
+      }),
+    )
+
+    renderView()
+    const user = userEvent.setup()
+
+    expect(await screen.findByText(/AI 就绪 · 3段动作/)).toBeInTheDocument()
+    expect(await screen.findByText('未检出手部')).toBeInTheDocument()
+
+    // View select dropdown allows filtering by ready view
+    const viewSelect = await screen.findByRole('combobox', { name: '视频视图' })
+    await user.click(viewSelect)
+    await user.click(await screen.findByText(/AI 已就绪/))
+
+    // Ready view filters correctly
+    expect(screen.getByRole('listitem', { name: /ready-video/ })).toBeInTheDocument()
+    expect(screen.queryByRole('listitem', { name: /invalid-video/ })).not.toBeInTheDocument()
+
+    // Switch to invalid/attention view
+    await user.click(viewSelect)
+    await user.click(await screen.findByText(/未检出手部 \/ 需关注/))
+
+    // The invalid group is visible, ready group is hidden
+    expect(screen.getByRole('listitem', { name: /invalid-video/ })).toBeInTheDocument()
+    expect(screen.queryByRole('listitem', { name: /ready-video/ })).not.toBeInTheDocument()
+
+    // Retry button is visible and clickable in invalid view
+    const retryButton = screen.getByRole('button', { name: /重新检测手部/ })
+    expect(retryButton).toBeInTheDocument()
+    await user.click(retryButton)
+    await waitFor(() => expect(retryMock).toHaveBeenCalled())
+
+    // Clean button is visible in invalid view
+    const cleanButton = screen.getByRole('button', { name: /清理未检出视频/ })
+    expect(cleanButton).toBeInTheDocument()
+    await user.click(cleanButton)
+
+    // Confirm dialog
+    const confirmButton = await screen.findByRole('button', { name: '确认清理' })
+    await user.click(confirmButton)
+
+    await waitFor(() => expect(cleanMock).toHaveBeenCalled())
   })
 })
 

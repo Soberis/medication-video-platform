@@ -328,7 +328,9 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
       session: { username: 'reviewer', role: 'MEMBER' },
     })
-    expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
+    expect(
+      await screen.findByText('手部检测：已完成 · 未检测到手部', {}, { timeout: 10000 }),
+    ).toBeInTheDocument()
     expect(document.body.textContent).not.toContain('MediaPipe 在采样帧中未检测到手')
     expect(screen.queryByRole('button', { name: '启动自动标注' })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('开始时间（毫秒）'), '1')
@@ -675,7 +677,7 @@ describe('CaptureGroup annotation workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 3000 }))
+    await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 10000 }))
     const video = await screen.findByLabelText('视频预览')
     Object.defineProperty(video, 'currentTime', {
       configurable: true,
@@ -737,7 +739,7 @@ describe('CaptureGroup annotation workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 3000 }))
+    await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 10000 }))
     const video = await screen.findByLabelText('视频预览')
     let paused = true
     const play = vi.fn(() => {

@@ -4,6 +4,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 
 import { renderRoute } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
+import * as annotationApi from '@/api/annotation'
 
 import {
   approvedGroupTask,
@@ -415,6 +416,103 @@ describe('CaptureGroup Review and event cleaning', () => {
 
     await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
     expect(screen.queryByRole('button', { name: '重新执行标注检查' })).not.toBeInTheDocument()
+  })
+
+  it('lets an authorized reviewer approve a revision and immediately trigger HDF5 download', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const viewSet = qualityFixture(group, 'QUALIFIED').confirmed_view_set
+    const submitted = submittedGroupTask(group, { confirmedViewSet: viewSet })
+    const completed = approvedGroupTask(group, { confirmedViewSet: viewSet })
+    stubGroupDetail(group, {
+      task: submitted,
+      taskResponses: [submitted, completed],
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const download = vi
+      .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
+      .mockResolvedValueOnce({ blob: new Blob(['synthetic']), fileName: 'synthetic.hdf5' })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:synthetic-download')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    const user = userEvent.setup()
+    renderCaptureGroup()
+
+    await user.click(await screen.findByRole('button', { name: '通过并下载 HDF5' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: '通过并下载' }))
+
+    await waitFor(() => {
+      expect(download).toHaveBeenCalledWith(projectId, [groupId])
+    })
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(revoke).toHaveBeenCalledWith('blob:synthetic-download')
+    expect(await screen.findByText('已开始下载 synthetic.hdf5。')).toBeInTheDocument()
+  })
+
+  it('allows direct HDF5 download from the approved review banner', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const completed = approvedGroupTask(group)
+    stubGroupDetail(group, {
+      task: completed,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const download = vi
+      .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
+      .mockResolvedValueOnce({ blob: new Blob(['synthetic']), fileName: 'synthetic.hdf5' })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:synthetic-download')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    const user = userEvent.setup()
+    renderCaptureGroup()
+
+    const bannerDownloadBtn = await screen.findByRole('button', { name: '下载当前组 HDF5' })
+    await user.click(bannerDownloadBtn)
+    await waitFor(() => {
+      expect(download).toHaveBeenCalledWith(projectId, [groupId])
+    })
+    expect(revoke).toHaveBeenCalledWith('blob:synthetic-download')
+  })
+
+  it('allows direct HDF5 download from the page header', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const completed = approvedGroupTask(group)
+    stubGroupDetail(group, {
+      task: completed,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const download = vi
+      .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
+      .mockResolvedValueOnce({ blob: new Blob(['synthetic']), fileName: 'synthetic.hdf5' })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:synthetic-download')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    const user = userEvent.setup()
+    renderCaptureGroup()
+
+    const headerDownloadBtn = await screen.findByRole('button', { name: '下载 HDF5' })
+    await user.click(headerDownloadBtn)
+    await waitFor(() => {
+      expect(download).toHaveBeenCalledWith(projectId, [groupId])
+    })
+    expect(revoke).toHaveBeenCalledWith('blob:synthetic-download')
   })
 })
 
