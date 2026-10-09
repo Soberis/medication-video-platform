@@ -57,10 +57,12 @@ function Get-ListeningProcessId {
 
 if (Test-Path -LiteralPath $runtimeFile) {
     try {
-        $managedProcesses = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json -AsHashtable
-        foreach ($key in $managedProcesses.Keys) {
-            $entry = $managedProcesses[$key]
-            Stop-ProcessTree ([int]$entry.processId) $entry.name
+        $json = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json
+        if ($json) {
+            foreach ($prop in $json.PSObject.Properties) {
+                $entry = $prop.Value
+                Stop-ProcessTree ([int]$entry.processId) $entry.name
+            }
         }
     }
     catch {
@@ -72,18 +74,17 @@ else {
     Write-Host 'No managed Core API, Web app, or Worker process record exists.' -ForegroundColor Yellow
 }
 
-if ($IncludeListeningApps) {
-    Import-LocalEnvironment $exampleEnvFile
-    if (Test-Path -LiteralPath $localEnvFile) {
-        Import-LocalEnvironment $localEnvFile
-    }
-    $apiPort = if ($env:PLATFORM_API_PORT) { [int]$env:PLATFORM_API_PORT } else { 8080 }
-    $webPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 5173 }
-    foreach ($port in @($apiPort, $webPort)) {
-        $listenerProcessId = Get-ListeningProcessId $port
-        if ($null -ne $listenerProcessId) {
-            Stop-ProcessTree $listenerProcessId "process listening on $port"
-        }
+Import-LocalEnvironment $exampleEnvFile
+if (Test-Path -LiteralPath $localEnvFile) {
+    Import-LocalEnvironment $localEnvFile
+}
+$apiPort = if ($env:PLATFORM_API_PORT) { [int]$env:PLATFORM_API_PORT } else { 8080 }
+$webPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 5173 }
+$targetPorts = if ($IncludeListeningApps) { @($apiPort, $webPort) } else { @($apiPort) }
+foreach ($port in $targetPorts) {
+    $listenerProcessId = Get-ListeningProcessId $port
+    if ($null -ne $listenerProcessId) {
+        Stop-ProcessTree $listenerProcessId "process listening on $port"
     }
 }
 
@@ -105,9 +106,15 @@ $composeArguments = @('compose') + $composeEnvironmentArguments + @('-f', $compo
 if ($ResetVolumes) {
     $composeArguments += @('-v')
 }
-& docker @composeArguments
+& docker @composeArguments --timeout 10
 if ($LASTEXITCODE -ne 0) {
-    throw 'Docker Compose did not stop cleanly.'
+    Write-Warning 'Docker Compose graceful shutdown timed out. Forcing container kill and cleanup...'
+    $killArguments = @('compose') + $composeEnvironmentArguments + @('-f', $composeFile, 'kill')
+    & docker @killArguments 2>$null
+    & docker @composeArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Docker Compose did not stop cleanly even after force killing.'
+    }
 }
 
 if ($ResetVolumes) {

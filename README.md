@@ -102,6 +102,14 @@ pnpm dev
 
 `start-local` 启动本地基础设施、Core API、Media Worker，并在手部模型配置完整时启动 AI Worker；LEAN-P0 不启动已退役的 Export Worker。前端由 pnpm 单独启动。用 `status-local` 查看状态，用 `stop-local` 停止脚本启动的本地进程；停止不会删除数据卷。
 
+### 默认管理端账号
+
+Web 前端界面默认登录账号与密码配置在根目录 `.env`（与 `.env.example` 对应）：
+
+- **账号**：`admin`
+- **密码**：`admin12345678`
+- **对应后端配置**：`services/core-api/src/main/resources/application.properties` 中的 `platform.security.bootstrap-admin-*`。
+
 部署前的运行时拓扑、配置边界、合成 smoke、备份恢复和故障恢复检查见[部署就绪检查与边界手册](./docs/runbooks/production-readiness.md)。该手册区分本地 synthetic smoke 与真实环境/UAT，不把前者当作生产通过。
 
 默认每类 Worker 启动 2 个进程：不同视频会由 RabbitMQ 自动分发给可用 Worker，因此上传多个视频后会并行完成媒体检测和手部候选检测；同一视频的任务仍受租约和幂等保护，不会被多个进程重复处理。每个 AI Worker 都会独立占用模型、CPU 和内存；开发机资源紧张时可显式降为 1 个进程：

@@ -89,7 +89,7 @@ $runtimeFile = Join-Path $logDirectory 'managed-processes.json'
 
 Write-Host 'Infrastructure:' -ForegroundColor Cyan
 if (Get-Command docker -ErrorAction SilentlyContinue) {
-    & docker compose @composeEnvironmentArguments -f $composeFile ps
+    & docker.exe ps --filter "name=medication-video-platform" --format "table {{.Names}}`t{{.Status}}`t{{.Ports}}"
 }
 else {
     Write-Host 'Docker CLI is unavailable.' -ForegroundColor Yellow
@@ -113,12 +113,14 @@ Show-Listener 'RabbitMQ' $rmqPort
 if (Test-Path -LiteralPath $runtimeFile) {
     Write-Host "`nProcesses started by start-local.ps1:" -ForegroundColor Cyan
     try {
-        $managedProcesses = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json -AsHashtable
-        foreach ($key in $managedProcesses.Keys) {
-            $entry = $managedProcesses[$key]
-            $running = $null -ne (Get-Process -Id $entry.processId -ErrorAction SilentlyContinue)
-            $state = if ($running) { 'running' } else { 'stale record' }
-            Write-Host "- $($entry.name): $state (PID $($entry.processId)); log: $($entry.log)"
+        $json = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json
+        if ($json) {
+            foreach ($prop in $json.PSObject.Properties) {
+                $entry = $prop.Value
+                $running = $null -ne (Get-Process -Id $entry.processId -ErrorAction SilentlyContinue)
+                $state = if ($running) { 'running' } else { 'stale record' }
+                Write-Host "- $($entry.name): $state (PID $($entry.processId)); log: $($entry.log)"
+            }
         }
     }
     catch {

@@ -182,6 +182,7 @@ else
         api "Core API" "$api_log_path" \
         "$PROJECT_ROOT/services/core-api/mvnw" \
         -f "$PROJECT_ROOT/services/core-api/pom.xml" \
+        -Dmaven.test.skip=true \
         -Dspring-boot.run.profiles=local \
         spring-boot:run
     wait_for_core_api

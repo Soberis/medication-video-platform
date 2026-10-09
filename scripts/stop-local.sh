@@ -88,11 +88,13 @@ if $reset_volumes; then
     compose_down_arguments+=(-v)
 fi
 
-docker compose "${COMPOSE_ENVIRONMENT_ARGUMENTS[@]}" "${compose_down_arguments[@]}"
-compose_exit_code=$?
-if [[ $compose_exit_code -ne 0 ]]; then
-    echo "Docker Compose did not stop cleanly." >&2
-    exit "$compose_exit_code"
+if ! docker compose "${COMPOSE_ENVIRONMENT_ARGUMENTS[@]}" "${compose_down_arguments[@]}" --timeout 10; then
+    echo "Docker Compose graceful shutdown timed out. Forcing container kill and cleanup..." >&2
+    docker compose "${COMPOSE_ENVIRONMENT_ARGUMENTS[@]}" -f "$COMPOSE_FILE" kill 2>/dev/null || true
+    if ! docker compose "${COMPOSE_ENVIRONMENT_ARGUMENTS[@]}" "${compose_down_arguments[@]}"; then
+        echo "Docker Compose did not stop cleanly even after force killing." >&2
+        exit 1
+    fi
 fi
 
 if $reset_volumes; then

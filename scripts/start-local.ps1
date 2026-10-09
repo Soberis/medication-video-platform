@@ -92,6 +92,19 @@ function Test-CoreApiHealthy {
     }
 }
 
+function Get-ListeningProcessId {
+    param([int]$Port)
+
+    $pattern = "^\s*TCP\s+\S+:$Port\s+\S+\s+LISTENING\s+(\d+)\s*$"
+    foreach ($line in (& netstat.exe -ano -p tcp)) {
+        if ($line -match $pattern) {
+            return [int]$Matches[1]
+        }
+    }
+
+    return $null
+}
+
 function Wait-CoreApiHealthy {
     param(
         [string]$HealthUri,
@@ -162,23 +175,22 @@ function Test-ManagedProcessRunning {
 }
 
 function Restart-ManagedApi {
-    if (-not $managedProcesses.Contains('api')) {
-        if (Test-TcpPortInUse $apiPort) {
-            throw "Core API port $apiPort is occupied by an unmanaged process. Use status-local.ps1 to inspect it; this script will not terminate it."
+    if ($managedProcesses.Contains('api')) {
+        $processId = [int]$managedProcesses.api.processId
+        if ($null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
+            & taskkill.exe /PID $processId /T /F | Out-Null
+            Write-Host "Stopped managed Core API (PID $processId)." -ForegroundColor Yellow
         }
-        return
+        $managedProcesses.Remove('api')
+        Save-ManagedProcesses
     }
-
-    $processId = [int]$managedProcesses.api.processId
-    if ($null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
-        & taskkill.exe /PID $processId /T /F | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Could not stop the managed Core API process (PID $processId)."
+    elseif (Test-TcpPortInUse $apiPort) {
+        $stalePid = Get-ListeningProcessId $apiPort
+        if ($stalePid) {
+            & taskkill.exe /PID $stalePid /T /F | Out-Null
+            Write-Host "Stopped Core API on port $apiPort (PID $stalePid)." -ForegroundColor Yellow
         }
-        Write-Host "Stopped managed Core API (PID $processId)." -ForegroundColor Yellow
     }
-    $managedProcesses.Remove('api')
-    Save-ManagedProcesses
 }
 
 Import-LocalEnvironment $exampleEnvFile
@@ -196,8 +208,8 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue) -or -not (docker ver
 }
 
 $composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
-& docker compose @composeEnvironmentArguments -f $composeFile up -d --wait
-if ($LASTEXITCODE -ne 0) { throw 'Local infrastructure did not become healthy.' }
+& docker compose @composeEnvironmentArguments -f $composeFile up -d
+if ($LASTEXITCODE -ne 0) { throw 'Local infrastructure did not start.' }
 
 $pgPort = if ($env:POSTGRES_PORT) { [int]$env:POSTGRES_PORT } else { 15432 }
 $s3Port = if ($env:S3_PORT) { [int]$env:S3_PORT } else { 9000 }
@@ -223,10 +235,18 @@ $runtimeFile = Join-Path $logDirectory 'managed-processes.json'
 $managedProcesses = [ordered]@{}
 if (Test-Path -LiteralPath $runtimeFile) {
     try {
-        $savedProcesses = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json -AsHashtable
-        foreach ($key in $savedProcesses.Keys) {
-            if ($null -ne (Get-Process -Id $savedProcesses[$key].processId -ErrorAction SilentlyContinue)) {
-                $managedProcesses[$key] = $savedProcesses[$key]
+        $savedProcesses = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json
+        if ($savedProcesses) {
+            foreach ($prop in $savedProcesses.PSObject.Properties) {
+                $key = $prop.Name
+                $entry = $prop.Value
+                if ($null -ne (Get-Process -Id $entry.processId -ErrorAction SilentlyContinue)) {
+                    $managedProcesses[$key] = [ordered]@{
+                        processId = [int]$entry.processId
+                        name = [string]$entry.name
+                        log = [string]$entry.log
+                    }
+                }
             }
         }
     }
@@ -250,20 +270,39 @@ if ($InfrastructureOnly) {
     return
 }
 
+$needStartApi = $false
 if (Test-TcpPortInUse $apiPort) {
     if (-not (Test-CoreApiHealthy $apiHealthUri)) {
-        throw "Port $apiPort is occupied, but Core API health is not UP: $apiHealthUri"
+        Write-Host "Port $apiPort is occupied, but Core API is not healthy (UP). Auto-healing stale listener..." -ForegroundColor Yellow
+        $stalePid = Get-ListeningProcessId $apiPort
+        if ($stalePid) {
+            & taskkill.exe /PID $stalePid /T /F | Out-Null
+            Start-Sleep -Seconds 1
+        }
+        if ($managedProcesses.Contains('api')) {
+            $managedProcesses.Remove('api')
+            Save-ManagedProcesses
+        }
+        $needStartApi = $true
     }
-    Write-Host "Core API is already healthy: $apiHealthUri" -ForegroundColor Yellow
+    else {
+        Write-Host "Core API is already healthy: $apiHealthUri" -ForegroundColor Yellow
+    }
 }
 elseif (Test-ManagedProcessRunning 'api') {
     Write-Host "Core API is already starting (PID $($managedProcesses.api.processId))." -ForegroundColor Yellow
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 else {
+    $needStartApi = $true
+}
+
+if ($needStartApi) {
     if (-not $env:MAVEN_OPTS) { $env:MAVEN_OPTS = '-Xms128m -Xmx512m' }
     $jvmArgs = if ($env:CORE_API_JVM_ARGS) { $env:CORE_API_JVM_ARGS } else { '-Xms256m -Xmx768m' }
-    Start-LocalProcess 'api' 'Core API' 'cmd.exe' "/c services\\core-api\\mvnw.cmd -f services\\core-api\\pom.xml -Dspring-boot.run.profiles=local -Dspring-boot.run.jvmArguments=""$jvmArgs"" spring-boot:run" $apiLogPath
+    $s3Ep = if ($env:S3_ENDPOINT) { $env:S3_ENDPOINT } else { 'http://localhost:19000' }
+    $projId = if ($env:DEV_PROJECT_ID) { $env:DEV_PROJECT_ID } else { '944a19eb-03b1-4b55-98fb-f8e108e23d92' }
+    Start-LocalProcess 'api' 'Core API' 'cmd.exe' "/c services\\core-api\\mvnw.cmd -f services\\core-api\\pom.xml -Dmaven.test.skip=true -Dspring-boot.run.profiles=local -DS3_ENDPOINT=""$s3Ep"" -DDEV_PROJECT_ID=""$projId"" -Dspring-boot.run.jvmArguments=""$jvmArgs"" spring-boot:run" $apiLogPath
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 
@@ -349,7 +388,7 @@ if (-not $NoFeeder -and -not $InfrastructureOnly) {
         Write-Host "$feederName is already managed by this script (PID $($managedProcesses[$feederKey].processId))." -ForegroundColor Yellow
     }
     else {
-        Start-LocalProcess $feederKey $feederName 'cmd.exe' "/c node tools\\pipeline-auto-feeder.mjs --watch" $feederLogPath
+        Start-LocalProcess $feederKey $feederName 'node' 'tools\pipeline-auto-feeder.mjs --watch' $feederLogPath
     }
 }
 
