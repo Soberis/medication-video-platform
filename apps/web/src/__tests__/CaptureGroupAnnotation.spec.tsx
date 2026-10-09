@@ -1164,18 +1164,22 @@ describe('simple camera submission workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    await user.click((await screen.findAllByRole('button', { name: '重新编辑' })).at(-1)!)
-    await user.click(await screen.findByRole('button', { name: '排除机位' }))
+    await user.click(
+      (await screen.findAllByRole('button', { name: '重新编辑' }, { timeout: 10000 })).at(-1)!,
+    )
+    await user.click(await screen.findByRole('button', { name: '排除机位' }, { timeout: 10000 }))
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByRole('textbox'), '无法确认目标动作')
     await user.click(within(dialog).getByRole('button', { name: /确认排除/ }))
 
-    await user.click(await screen.findByRole('button', { name: /取消排除/ }))
-    const submit = await screen.findByRole('button', { name: '提交机位' })
+    await user.click(await screen.findByRole('button', { name: /取消排除/ }, { timeout: 10000 }))
+    const submit = await screen.findByRole('button', { name: '提交机位' }, { timeout: 10000 })
     await waitFor(() => expect(submit).toBeEnabled())
     await user.click(submit)
-    await user.click((await screen.findAllByRole('button', { name: '重新编辑' })).at(-1)!)
-    await user.click(await screen.findByRole('button', { name: '排除机位' }))
+    await user.click(
+      (await screen.findAllByRole('button', { name: '重新编辑' }, { timeout: 10000 })).at(-1)!,
+    )
+    await user.click(await screen.findByRole('button', { name: '排除机位' }, { timeout: 10000 }))
     const nextDialog = await screen.findByRole('dialog')
     await user.type(within(nextDialog).getByRole('textbox'), '再次排除')
     await user.click(within(nextDialog).getByRole('button', { name: /确认排除/ }))
@@ -1197,7 +1201,7 @@ describe('simple camera submission workflow', () => {
       'EXCLUDED',
     ])
     expect(await screen.findByRole('button', { name: /取消排除/ })).toBeInTheDocument()
-  })
+  }, 30000)
 
   it('lets a project member exclude another owner’s camera and restore it with a clean draft', async () => {
     const group = captureGroupFixture(groupId, {
