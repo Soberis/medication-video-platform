@@ -14,7 +14,8 @@ param(
     [ValidateRange(1, 8)]
     [int]$AiWorkerConcurrency = 2,
     [ValidateRange(30, 600)]
-    [int]$ApiStartupTimeoutSeconds = 180
+    [int]$ApiStartupTimeoutSeconds = 180,
+    [switch]$NoFeeder
 )
 
 if ($Action -eq 'restart') {
@@ -83,7 +84,7 @@ function Test-CoreApiHealthy {
     param([string]$HealthUri)
 
     try {
-        $health = Invoke-RestMethod -Uri $HealthUri -Method Get -TimeoutSec 2
+        $health = Invoke-RestMethod -Uri $HealthUri -Method Get -TimeoutSec 8
         return $health.status -eq 'UP'
     }
     catch {
@@ -260,7 +261,9 @@ elseif (Test-ManagedProcessRunning 'api') {
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 else {
-    Start-LocalProcess 'api' 'Core API' 'cmd.exe' "/c services\\core-api\\mvnw.cmd -f services\\core-api\\pom.xml -Dspring-boot.run.profiles=local spring-boot:run" $apiLogPath
+    if (-not $env:MAVEN_OPTS) { $env:MAVEN_OPTS = '-Xms128m -Xmx512m' }
+    $jvmArgs = if ($env:CORE_API_JVM_ARGS) { $env:CORE_API_JVM_ARGS } else { '-Xms256m -Xmx768m' }
+    Start-LocalProcess 'api' 'Core API' 'cmd.exe' "/c services\\core-api\\mvnw.cmd -f services\\core-api\\pom.xml -Dspring-boot.run.profiles=local -Dspring-boot.run.jvmArguments=""$jvmArgs"" spring-boot:run" $apiLogPath
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 
@@ -337,9 +340,26 @@ if ($AiWorker -or ((-not $InfrastructureOnly) -and $env:AI_HAND_POSE_ENABLED -eq
     }
 }
 
+if (-not $NoFeeder -and -not $InfrastructureOnly) {
+    $feederKey = 'feeder'
+    $feederName = 'Pipeline Auto-Feeder'
+    $feederLogPath = Join-Path $logDirectory 'feeder.log'
+
+    if (Test-ManagedProcessRunning $feederKey) {
+        Write-Host "$feederName is already managed by this script (PID $($managedProcesses[$feederKey].processId))." -ForegroundColor Yellow
+    }
+    else {
+        Start-LocalProcess $feederKey $feederName 'cmd.exe' "/c node tools\\pipeline-auto-feeder.mjs --watch" $feederLogPath
+    }
+}
+
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: $apiHealthUri" -ForegroundColor Cyan
 Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
 Write-Host "Workers: $MediaWorkerConcurrency Media Worker replica(s); $AiWorkerConcurrency AI Worker replica(s) when AI_HAND_POSE_ENABLED=true." -ForegroundColor Cyan
+if (-not $NoFeeder -and -not $InfrastructureOnly) {
+    Write-Host "Feeder: resilient pipeline self-healing active. Log: $logDirectory\feeder.log" -ForegroundColor Cyan
+}
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray
+
