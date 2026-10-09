@@ -120,6 +120,9 @@ class HandPoseJobService {
 					HandPoseProfile.PROFILE_SHA256);
 		if (natural.isPresent()) {
 			var job = requireSameRequest(natural.get(), fingerprint);
+			if (job.getStatus() == AiCandidateJobStatus.FAILED) {
+				return retryFailedJob(projectId, clipAssetId, job, context, receiptKey, fingerprint, now);
+			}
 			this.recordReceipt(job, receiptKey, fingerprint, Instant.now().truncatedTo(ChronoUnit.MICROS));
 			return response(job);
 		}
@@ -131,6 +134,24 @@ class HandPoseJobService {
 		this.auditRecorder.record(new AuditEventCommand(now, context.actorType(), context.actorId(), projectId,
 				context.auditAction(), "AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
 				"MEDIAPIPE_HAND_LANDMARKER", context.requestId(), context.traceId(), context.authorizationReference(),
+				java.util.Map.of("clip_asset_id", clipAssetId.toString(), "model_sha256", this.modelSha256,
+						"sampling_fps", Integer.toString(HandPoseProfile.SAMPLING_FPS))));
+		return response(job);
+	}
+
+	private HandPoseJobResponse retryFailedJob(UUID projectId, UUID clipAssetId, AiCandidateJob candidate,
+			QueueContext context, String receiptKey, String fingerprint, Instant now) {
+		var job = this.repository.findForUpdate(candidate.getAiJobId()).orElse(candidate);
+		job.requeueForManualRetry(now);
+		this.repository.save(job);
+		var attempt = this.attemptQueue.latest(job.getAiJobId());
+		int nextAttemptNumber = attempt != null ? attempt.getAttempt() + 1 : 1;
+		this.attemptQueue.enqueue(job, nextAttemptNumber, now);
+		this.recordReceipt(job, receiptKey, fingerprint, now);
+		this.auditRecorder.record(new AuditEventCommand(now, context.actorType(), context.actorId(), projectId,
+				"AI_HAND_POSE_JOB_MANUAL_RETRY_QUEUED", "AIJob", job.getAiJobId().toString(),
+				Integer.toString(nextAttemptNumber), AuditOutcome.SUCCEEDED, "MEDIAPIPE_HAND_LANDMARKER",
+				context.requestId(), context.traceId(), context.authorizationReference(),
 				java.util.Map.of("clip_asset_id", clipAssetId.toString(), "model_sha256", this.modelSha256,
 						"sampling_fps", Integer.toString(HandPoseProfile.SAMPLING_FPS))));
 		return response(job);

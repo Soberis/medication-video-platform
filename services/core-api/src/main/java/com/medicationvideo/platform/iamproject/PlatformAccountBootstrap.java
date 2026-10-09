@@ -41,9 +41,17 @@ class PlatformAccountBootstrap {
 				throw new IllegalStateException(
 						"The bootstrap administrator username or password does not meet the minimum policy.");
 			}
-			repository.findByUsername(username)
-				.orElseGet(() -> repository.save(PlatformAccount.create(username, passwordEncoder.encode(password),
-						PlatformAccountRole.ADMIN, Instant.now())));
+			var existing = repository.findByUsername(username);
+			if (existing.isPresent()) {
+				var account = existing.get();
+				if (!passwordEncoder.matches(password, account.getPasswordHash())) {
+					account.changePassword(passwordEncoder.encode(password), Instant.now());
+					repository.save(account);
+				}
+				return;
+			}
+			repository.save(PlatformAccount.create(username, passwordEncoder.encode(password),
+					PlatformAccountRole.ADMIN, Instant.now()));
 		};
 	}
 

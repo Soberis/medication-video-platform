@@ -108,6 +108,27 @@ class HandPoseJobServiceTests {
 	}
 
 	@Test
+	void queueRetriesAnExistingFailedJobInsteadOfReturningStaleFailure() {
+		var fixture = fixture(3, true);
+		fixture.prepareReadyForQueue();
+		var failedJob = queuedJob("human-actor");
+		failedJob.fail(Instant.EPOCH);
+		when(fixture.repository
+			.findByProjectIdAndClipAssetIdAndInputSha256AndAlgorithmKeyAndAlgorithmVersionAndModelSha256AndSamplingFpsAndProfileSha256(
+					any(), any(), any(), any(), any(), any(), eq(HandPoseProfile.SAMPLING_FPS), any()))
+			.thenReturn(Optional.of(failedJob));
+		when(fixture.repository.findForUpdate(failedJob.getAiJobId())).thenReturn(Optional.of(failedJob));
+
+		var response = fixture.service.queueAfterMediaIngested(PROJECT_ID, CLIP_ASSET_ID);
+
+		assertEquals("QUEUED", response.status());
+		assertEquals(failedJob.getAiJobId(), response.aiJobId());
+		verify(fixture.repository, times(1)).save(failedJob);
+		verify(fixture.attemptRepository, times(1)).save(any(AiCandidateJobAttempt.class));
+		verify(fixture.dispatch, times(1)).enqueue(any(), any());
+	}
+
+	@Test
 	void manualQueueReusesAnAutomaticallyCreatedEquivalentNaturalKeyJob() {
 		var fixture = fixture(3, true);
 		fixture.prepareReadyForQueue();

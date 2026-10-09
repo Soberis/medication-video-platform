@@ -88,6 +88,11 @@ class PlatformAccount {
 		this.updatedAt = now;
 	}
 
+	void changePassword(String passwordHash, Instant now) {
+		this.passwordHash = passwordHash;
+		this.updatedAt = now;
+	}
+
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
