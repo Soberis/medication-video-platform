@@ -26,6 +26,7 @@ import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
+import com.medicationvideo.platform.iamproject.ProjectRole;
 import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupInputFreeze;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupInputFreezeQueryService;
@@ -253,6 +254,43 @@ class CaptureGroupAnnotationWorkflow {
 						Boolean.toString(review.getDecision() == AnnotationReviewDecision.REJECTED), "task_completed",
 						Boolean.toString(review.getDecision() == AnnotationReviewDecision.APPROVED))));
 		return AnnotationReviewResponse.from(review);
+	}
+
+	@Transactional
+	AnnotationTaskResponse reopenTask(UUID projectId, UUID taskId, String actorId, boolean platformAdministrator,
+			String idempotencyKey, String requestId, String traceId) {
+		var role = this.projectAccessService.lockAndRequireMember(projectId, actorId);
+		var task = this.taskRepository.findForUpdate(projectId, taskId)
+			.orElseThrow(CaptureGroupAnnotationWorkflow::taskNotFound);
+		if (task.getStatus() == AnnotationTaskStatus.ASSIGNED) {
+			return AnnotationTaskResponse
+				.from(task, platformAdministrator && role == ProjectRole.ADMIN, null, null, null)
+				.withCameraViews(this.taskViewService.findAll(task.getAnnotationTaskId()));
+		}
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var revision = this.revisionRepository
+			.findTopByAnnotationTaskIdOrderByRevisionNumberDesc(task.getAnnotationTaskId())
+			.orElse(null);
+		if (revision != null && "annotation-document.v2".equals(revision.getAnnotationSchemaVersion())) {
+			var cameraNumbers = task.getConfirmedViewSet().get("views") instanceof List<?> views ? views.stream()
+				.filter(Map.class::isInstance)
+				.map(Map.class::cast)
+				.map(row -> row.get("camera_number"))
+				.filter(Number.class::isInstance)
+				.map(num -> ((Number) num).intValue())
+				.toList() : List.<Integer>of(1);
+			this.taskViewService.restoreAfterReview(task, revision, cameraNumbers, actorId, idempotencyKey, now);
+		}
+		task.reopenForRework(now);
+		this.taskRepository.saveAndFlush(task);
+		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
+				"ANNOTATION_TASK_REOPENED_FOR_REWORK", "AnnotationTask", task.getAnnotationTaskId().toString(),
+				Long.toString(task.getVersion()), AuditOutcome.SUCCEEDED, "MANUAL_REOPEN_FOR_REWORK", requestId,
+				traceId, "PROJECT_MEMBERSHIP_MEMBER",
+				Map.of("capture_group_id", task.getCaptureGroupId().toString(), "previous_status",
+						AnnotationTaskStatus.COMPLETED.name(), "new_status", AnnotationTaskStatus.ASSIGNED.name())));
+		return AnnotationTaskResponse.from(task, platformAdministrator && role == ProjectRole.ADMIN, null, null, null)
+			.withCameraViews(this.taskViewService.findAll(task.getAnnotationTaskId()));
 	}
 
 	private GroupSubmissionContext requireGroupSubmissionContext(UUID projectId, AnnotationTask task) {

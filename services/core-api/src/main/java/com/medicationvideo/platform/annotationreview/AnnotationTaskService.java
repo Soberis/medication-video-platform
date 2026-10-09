@@ -213,6 +213,13 @@ class AnnotationTaskService {
 				requestId, traceId, request);
 	}
 
+	@Transactional
+	AnnotationTaskResponse reopenTask(UUID projectId, UUID taskId, String actorId, boolean platformAdministrator,
+			String idempotencyKey, String requestId, String traceId) {
+		return this.captureGroupAnnotationWorkflow.reopenTask(projectId, taskId, actorId, platformAdministrator,
+				idempotencyKey, requestId, traceId);
+	}
+
 	private Map<String, Object> buildV2Document(AnnotationTask task, AnnotationRevisionSubmitCommand request,
 			List<AnnotationTaskCameraViewResponse> views) {
 		var expectedCameraNumbers = new HashSet<Integer>();

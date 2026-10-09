@@ -242,6 +242,11 @@ class AnnotationTask {
 		this.updatedAt = now;
 	}
 
+	void reopenForRework(Instant now) {
+		this.status = AnnotationTaskStatus.ASSIGNED;
+		this.updatedAt = now;
+	}
+
 }
 
 enum AnnotationTaskStatus {

@@ -150,6 +150,18 @@ class AnnotationTaskController {
 			.body(response);
 	}
 
+	@PostMapping("/annotation-tasks/{annotationTaskId}/reopen")
+	ResponseEntity<AnnotationTaskResponse> reopenTask(@PathVariable UUID projectId, @PathVariable UUID annotationTaskId,
+			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
+		var effectiveKey = idempotencyKey != null && !idempotencyKey.isBlank() ? idempotencyKey
+				: "reopen:" + UUID.randomUUID().toString();
+		var response = this.service.reopenTask(projectId, annotationTaskId, requireActor(authentication).actorId(),
+				isPlatformAdministrator(authentication), effectiveKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new AnnotationTaskException("ANNOTATION_TASK_ACCESS_DENIED",
