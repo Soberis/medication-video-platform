@@ -1,10 +1,12 @@
-import { Alert, App as AntdApp, Button, Checkbox, Input, Tooltip } from 'antd'
-import { Check, CircleAlert, FileCheck2, History, Play } from 'lucide-react'
+import { Alert, App as AntdApp, Button, Checkbox, Input, Popconfirm, Tooltip } from 'antd'
+import { Check, CircleAlert, Download, FileCheck2, History, Play, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { paths } from '@/app/paths'
+import { triggerHdf5Download } from '@/features/capture-group/export-hdf5'
 
 import {
+  reopenAnnotationTask,
   reviewAnnotationRevision,
   type AnnotationLabelSchema,
   type AnnotationReview,
@@ -56,9 +58,40 @@ export function CaptureGroupReviewPanel({
 }: CaptureGroupReviewPanelProps) {
   const navigate = useNavigate()
   const { message, modal } = AntdApp.useApp()
-  const [reviewingDecision, setReviewingDecision] = useState<AnnotationReview['decision'] | null>(
-    null,
-  )
+  const [reviewingDecision, setReviewingDecision] = useState<
+    AnnotationReview['decision'] | 'APPROVED_DOWNLOAD' | null
+  >(null)
+  const [isDownloadingHdf5, setIsDownloadingHdf5] = useState(false)
+  const [isReopening, setIsReopening] = useState(false)
+
+  async function handleDownloadHdf5() {
+    if (isDownloadingHdf5) return
+    setIsDownloadingHdf5(true)
+    try {
+      const fileName = await triggerHdf5Download(projectId, [group.capture_group_id])
+      void message.success(`已开始下载 ${fileName}。`)
+    } catch (error) {
+      void message.error(
+        error instanceof Error ? error.message : 'HDF5 导出失败，请重试。',
+      )
+    } finally {
+      setIsDownloadingHdf5(false)
+    }
+  }
+
+  async function handleReopenForRework() {
+    if (!task || isReopening) return
+    setIsReopening(true)
+    try {
+      await reopenAnnotationTask(projectId, task.annotation_task_id)
+      void message.success('已打回草稿状态，现在可以重新编辑标注时间段与标签。')
+      await onRefresh()
+    } catch (error) {
+      void message.error(`打回重修失败: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsReopening(false)
+    }
+  }
   const revision = task?.annotation_revision ?? null
   const review = revision?.review ?? null
   const viewSet = revision?.confirmed_view_set ?? task?.confirmed_view_set ?? null
@@ -157,7 +190,10 @@ export function CaptureGroupReviewPanel({
     })
   }
 
-  function openReview(decision: AnnotationReview['decision']) {
+  function openReview(
+    decision: AnnotationReview['decision'],
+    options?: { downloadAfter?: boolean },
+  ) {
     if (!task || !revision || !task.can_review || reviewingDecision) return
     if (!canFinalizeReview) {
       void message.warning('请先处理完所有机位：每个机位都必须提交标注或排除。')
@@ -169,9 +205,16 @@ export function CaptureGroupReviewPanel({
     }
     let reviewNote = ''
     const approved = decision === 'APPROVED'
+    const downloadAfter = Boolean(approved && options?.downloadAfter)
     modal.confirm({
-      title: approved ? '通过人工标签复核' : '退回人工标签修订',
-      content: approved ? (
+      title: downloadAfter
+        ? '通过复核并下载 HDF5'
+        : approved
+          ? '通过人工标签复核'
+          : '退回人工标签修订',
+      content: downloadAfter ? (
+        <p>确认本次多机位动作标注正确并予以通过？通过后将生成正式版本，并立即开始下载该组的 HDF5 数据集。</p>
+      ) : approved ? (
         <p>确认本次多机位动作标注正确并予以通过？通过后将生成正式版本用于后续质检与导出。</p>
       ) : (
         <div className="capture-group-review-confirmation">
@@ -187,11 +230,11 @@ export function CaptureGroupReviewPanel({
           />
         </div>
       ),
-      okText: approved ? '通过复核' : '退回修改',
+      okText: downloadAfter ? '通过并下载' : approved ? '通过复核' : '退回修改',
       cancelText: '取消',
       okButtonProps: { danger: !approved },
       async onOk() {
-        setReviewingDecision(decision)
+        setReviewingDecision(downloadAfter ? 'APPROVED_DOWNLOAD' : decision)
         try {
           await reviewAnnotationRevision(
             projectId,
@@ -214,6 +257,16 @@ export function CaptureGroupReviewPanel({
                   ? '复核已通过，但最新事实暂未刷新；请手动刷新确认。'
                   : '修订已退回，但最新事实暂未刷新；请手动刷新确认。',
               ))
+          if (downloadAfter) {
+            try {
+              const fileName = await triggerHdf5Download(projectId, [group.capture_group_id])
+              void message.success(`已开始下载 ${fileName}。`)
+            } catch (dlErr) {
+              void message.error(
+                dlErr instanceof Error ? dlErr.message : 'HDF5 导出失败，请重试。',
+              )
+            }
+          }
         } catch (error) {
           void message.error(
             error instanceof Error ? error.message : '复核暂未提交，请刷新后重试。',
@@ -323,18 +376,35 @@ export function CaptureGroupReviewPanel({
             <StatusIndicator tone="success">人工复核已通过</StatusIndicator>
             <p role="status">
               {group.expected_camera_count > 1
-                ? `合组 ${group.received_camera_count} 个已接收机位的独立标注均已完成复核${cameraSummaryDetail ? `：${cameraSummaryDetail}` : ''}。可返回视频列表直接选择导出。`
-                : '标注已完成人工复核确认，可返回视频列表选择导出。'}
+                ? `合组 ${group.received_camera_count} 个已接收机位的独立标注均已完成复核${cameraSummaryDetail ? `：${cameraSummaryDetail}` : ''}。可直接下载当前组 HDF5 数据集。`
+                : '标注已完成人工复核确认，可直接下载当前组 HDF5 数据集。'}
             </p>
           </div>
           <div className="capture-group-approved-actions">
             <Button
               type="primary"
               size="small"
-              onClick={() => navigate(paths.captureGroups(projectId))}
+              icon={<Download size={14} strokeWidth={2} />}
+              loading={isDownloadingHdf5}
+              onClick={() => void handleDownloadHdf5()}
             >
-              前往导出数据
+              下载当前组 HDF5
             </Button>
+            <Popconfirm
+              title="重新编辑此视频标注？"
+              description="重新编辑将把当前通过状态打回为可编辑草稿，保留已确认的动作片段供您微调。修改完毕后可再次手动提交并通过复核。"
+              okText="确认重新编辑"
+              cancelText="取消"
+              onConfirm={() => void handleReopenForRework()}
+            >
+              <Button
+                size="small"
+                icon={<RotateCcw size={14} strokeWidth={2} />}
+                loading={isReopening}
+              >
+                重新编辑
+              </Button>
+            </Popconfirm>
             <Button
               type="text"
               size="small"
@@ -368,15 +438,23 @@ export function CaptureGroupReviewPanel({
                 <span>
                   <Button
                     type="primary"
-                    icon={<Check size={14} strokeWidth={2.2} />}
-                    loading={reviewingDecision === 'APPROVED'}
+                    icon={<Download size={14} strokeWidth={2.2} />}
+                    loading={reviewingDecision === 'APPROVED_DOWNLOAD'}
                     disabled={reviewingDecision !== null || !canFinalizeReview}
-                    onClick={() => openReview('APPROVED')}
+                    onClick={() => openReview('APPROVED', { downloadAfter: true })}
                   >
-                    通过复核
+                    通过并下载 HDF5
                   </Button>
                 </span>
               </Tooltip>
+              <Button
+                icon={<Check size={14} strokeWidth={2.2} />}
+                loading={reviewingDecision === 'APPROVED'}
+                disabled={reviewingDecision !== null || !canFinalizeReview}
+                onClick={() => openReview('APPROVED')}
+              >
+                通过复核
+              </Button>
               <Button
                 danger
                 loading={reviewingDecision === 'REJECTED'}

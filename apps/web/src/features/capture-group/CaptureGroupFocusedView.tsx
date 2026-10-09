@@ -1,7 +1,8 @@
-import { Descriptions } from 'antd'
-import { Video } from 'lucide-react'
+import { App as AntdApp, Button, Descriptions } from 'antd'
+import { RotateCcw, Video } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { retryHandPoseDetection } from '@/api/capture-groups'
 import { MediaReportCard, PlaybackCard } from '@/components/AssetDetailSections'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
@@ -21,6 +22,7 @@ interface CaptureGroupFocusedViewProps {
   isCompleted?: boolean
   externalVideoRef?: React.RefObject<HTMLVideoElement | null>
   initialPlaybackTimeMs?: number | null
+  projectId?: string
 }
 
 export function CaptureGroupFocusedView({
@@ -32,7 +34,10 @@ export function CaptureGroupFocusedView({
   isCompleted = false,
   externalVideoRef,
   initialPlaybackTimeMs,
+  projectId = '',
 }: CaptureGroupFocusedViewProps) {
+  const { message } = AntdApp.useApp()
+  const [isRetryingHandPose, setIsRetryingHandPose] = useState(false)
   const {
     selectedStream,
     selectedDetail,
@@ -57,6 +62,21 @@ export function CaptureGroupFocusedView({
   } = viewState
   const internalVideoRef = useRef<HTMLVideoElement | null>(null)
   const videoRef = externalVideoRef ?? internalVideoRef
+
+  const handleRetryHandPose = async () => {
+    const clipId = selectedDetail?.clip_asset_id || selectedStream?.clip_asset_id
+    if (!clipId) return
+    setIsRetryingHandPose(true)
+    try {
+      await retryHandPoseDetection({ clipAssetId: clipId, projectId })
+      void message.success('已重新发起手部检测，后台正在分析中…')
+      void loadSelectedView()
+    } catch (err) {
+      void message.error(`重试失败: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setIsRetryingHandPose(false)
+    }
+  }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -299,9 +319,24 @@ export function CaptureGroupFocusedView({
       ) : null}
       {selectedDetail || selectedStream ? (
         <>
-          <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
-            手部检测：{currentCandidateLiveStatus}
-          </StatusIndicator>
+          <div className="capture-group-candidate-status-row">
+            <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
+              手部检测：{currentCandidateLiveStatus}
+            </StatusIndicator>
+            {currentCandidateTone === 'destructive' ||
+            candidateResponse?.job.status === 'FAILED' ||
+            candidateResponse?.job.hand_result === 'NO_HAND_DETECTED' ? (
+              <Button
+                type="text"
+                size="small"
+                icon={<RotateCcw size={14} strokeWidth={1.8} />}
+                loading={isRetryingHandPose}
+                onClick={() => void handleRetryHandPose()}
+              >
+                重新检测手部
+              </Button>
+            ) : null}
+          </div>
           <details
             className="capture-group-focused-details"
             open={isDetailsOpen}

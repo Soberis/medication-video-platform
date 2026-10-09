@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 
 import {
   AnnotationTaskApiError,
-  downloadHumanDemonstrationHdf5,
   listAnnotationTasks,
 } from '@/api/annotation'
 import { listAllCaptureGroupSummaries, type CaptureGroupSummary } from '@/api/capture-groups'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { triggerHdf5Download } from '@/features/capture-group/export-hdf5'
 import { isHumanAnnotationExportReady } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
@@ -80,20 +80,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
     if (loading || readState !== 'success' || !selectedExportIds.length) return
     setLoading(true)
     try {
-      const { blob, fileName } = await downloadHumanDemonstrationHdf5(projectId, selectedExportIds)
-      const objectUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = fileName
-      link.rel = 'noopener'
-      link.hidden = true
-      document.body.append(link)
-      try {
-        link.click()
-      } finally {
-        URL.revokeObjectURL(objectUrl)
-        link.remove()
-      }
+      const fileName = await triggerHdf5Download(projectId, selectedExportIds)
       setOpen(false)
       void message.success(`已开始下载 ${fileName}。`)
     } catch (error) {
@@ -224,7 +211,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                       </Checkbox>
                     ),
                     key: 'select',
-                    width: 96,
+                    width: 76,
                     render: (_, row) => (
                       <Checkbox
                         aria-label={`选择导出 ${row.capture_group_key ?? shortId(row.capture_group_id)}`}
@@ -237,16 +224,33 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                   {
                     title: '视频',
                     key: 'identity',
-                    render: (_, row) => (
-                      <span className="mono-wrap capture-group-export-key">
-                        {row.capture_group_key ?? shortId(row.capture_group_id)}
-                      </span>
-                    ),
+                    ellipsis: true,
+                    render: (_, row) => {
+                      const rawKey = row.capture_group_key ?? shortId(row.capture_group_id)
+                      let platform: string | null = null
+                      let displayId = rawKey
+                      if (rawKey.startsWith('xhs-')) {
+                        platform = '小红书'
+                        displayId = rawKey.slice(4)
+                      } else if (rawKey.startsWith('douyin-')) {
+                        platform = '抖音'
+                        displayId = rawKey.slice(7)
+                      } else if (rawKey.startsWith('youtube-')) {
+                        platform = 'YouTube'
+                        displayId = rawKey.slice(8)
+                      }
+                      return (
+                        <span className="capture-group-export-key" title={`完整标识: ${rawKey}`}>
+                          {platform ? <span className="export-key-tag">{platform}</span> : null}
+                          <span className="export-key-code">{displayId}</span>
+                        </span>
+                      )
+                    },
                   },
                   {
                     title: '采集时间',
                     key: 'device_time',
-                    width: 220,
+                    width: 180,
                     render: (_, row) => (
                       <span className="muted-text">
                         {formatDateTime(row.device_time_utc ?? row.created_at)}
@@ -256,7 +260,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                   {
                     title: '机位',
                     key: 'cameras',
-                    width: 100,
+                    width: 80,
                     align: 'right',
                     render: (_, row) => (
                       <span className="muted-text">

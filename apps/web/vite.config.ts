@@ -1,10 +1,24 @@
+import { existsSync } from 'node:fs'
+import type { ServerResponse } from 'node:http'
 import { createServer } from 'node:net'
-import { fileURLToPath, URL } from 'node:url'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 
 import react from '@vitejs/plugin-react'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type Connect, type ViteDevServer } from 'vite'
 
-const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url))
+function findWorkspaceRoot(start: string): string {
+  let cur = start
+  while (cur) {
+    if (existsSync(join(cur, 'pnpm-workspace.yaml'))) return cur
+    const parent = dirname(cur)
+    if (parent === cur) break
+    cur = parent
+  }
+  return start
+}
+
+const workspaceRoot = findWorkspaceRoot(fileURLToPath(import.meta.url))
 
 async function isPortAvailable(port: number, host = '127.0.0.1'): Promise<boolean> {
   return new Promise((resolve) => {
@@ -62,7 +76,115 @@ export default defineConfig(async ({ mode }) => {
 
   return {
     envDir: workspaceRoot,
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: 'dev-clean-video-api',
+        configureServer(server: ViteDevServer) {
+          const toolModule = pathToFileURL(resolve(workspaceRoot, 'tools/clean-invalid-videos.mjs')).href
+
+          function readJson<T = unknown>(req: Connect.IncomingMessage): Promise<T> {
+            return new Promise((resolve, reject) => {
+              let body = ''
+              req.on('data', (chunk: Buffer | string) => {
+                body += chunk
+              })
+              req.on('end', () => {
+                try {
+                  resolve(body ? JSON.parse(body) : ({} as T))
+                } catch (err) {
+                  reject(err)
+                }
+              })
+              req.on('error', reject)
+            })
+          }
+
+          function sendJson(res: ServerResponse, data: unknown, status = 200) {
+            res.statusCode = status
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(data))
+          }
+
+          server.middlewares.use('/api/dev/pipeline-status', async (req: Connect.IncomingMessage, res: ServerResponse) => {
+            if (req.method !== 'GET') {
+              res.statusCode = 405
+              res.end()
+              return
+            }
+            try {
+              const url = new URL(req.url ?? '', `http://${req.headers.host || 'localhost'}`)
+              const projectId = url.searchParams.get('projectId') || undefined
+              const { getCaptureGroupsPipelineStatus } = await import(/* @vite-ignore */ toolModule)
+              sendJson(res, { ok: true, ...getCaptureGroupsPipelineStatus(projectId) })
+            } catch (err) {
+              sendJson(res, { ok: false, error: String(err) }, 500)
+            }
+          })
+
+          server.middlewares.use('/api/dev/clean-invalid-videos', async (req: Connect.IncomingMessage, res: ServerResponse) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.end()
+              return
+            }
+            try {
+              const parsed = await readJson<Record<string, unknown>>(req)
+              const { cleanInvalidCaptureGroups } = await import(/* @vite-ignore */ toolModule)
+              sendJson(res, { ok: true, ...cleanInvalidCaptureGroups(parsed) })
+            } catch (err) {
+              sendJson(res, { ok: false, error: String(err) }, 500)
+            }
+          })
+
+          server.middlewares.use('/api/dev/clean-capture-group', async (req: Connect.IncomingMessage, res: ServerResponse) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.end()
+              return
+            }
+            try {
+              const { captureGroupId } = await readJson<{ captureGroupId: string }>(req)
+              const { deleteCaptureGroup } = await import(/* @vite-ignore */ toolModule)
+              deleteCaptureGroup(captureGroupId)
+              sendJson(res, { ok: true, captureGroupId })
+            } catch (err) {
+              sendJson(res, { ok: false, error: String(err) }, 500)
+            }
+          })
+
+          server.middlewares.use('/api/dev/retry-hand-pose', async (req: Connect.IncomingMessage, res: ServerResponse) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.end()
+              return
+            }
+            try {
+              const { clipAssetId, projectId } = await readJson<{ clipAssetId: string; projectId?: string }>(req)
+              const { retryHandPoseJob } = await import(/* @vite-ignore */ toolModule)
+              sendJson(res, { ok: true, ...(await retryHandPoseJob(clipAssetId, projectId)) })
+            } catch (err) {
+              sendJson(res, { ok: false, error: String(err) }, 500)
+            }
+          })
+
+          server.middlewares.use('/api/dev/retry-failed-hand-poses', async (req: Connect.IncomingMessage, res: ServerResponse) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.end()
+              return
+            }
+            try {
+              const parsed = await readJson<{ limit?: number; projectId?: string }>(req)
+              const { retryFailedHandPoseBatch } = await import(/* @vite-ignore */ toolModule)
+              sendJson(res, { ok: true, ...(await retryFailedHandPoseBatch(parsed.limit || 50, parsed.projectId)) })
+            } catch (err) {
+              sendJson(res, { ok: false, error: String(err) }, 500)
+            }
+          })
+        },
+      },
+    ],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

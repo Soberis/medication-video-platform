@@ -1,5 +1,5 @@
-import { Alert, Button, Modal, Skeleton } from 'antd'
-import { ArrowLeft } from 'lucide-react'
+import { Alert, App as AntdApp, Button, Modal, Popconfirm, Skeleton } from 'antd'
+import { ArrowLeft, Download, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -14,6 +14,7 @@ import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGro
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
 import { CaptureGroupReviewPanel } from '@/features/capture-group/CaptureGroupReviewPanel'
+import { triggerHdf5Download } from '@/features/capture-group/export-hdf5'
 import {
   createGroupViewRows,
   type GroupViewRow,
@@ -25,10 +26,11 @@ import {
   captureGroupReviewFallbackTargetId,
   captureGroupTaskDestination,
   captureGroupFocusTargetIds,
+  isHumanAnnotationExportReady,
 } from '@/features/capture-group-presentation'
 import { shortId } from '@/features/catalog/catalog-presentation'
 
-import type { CaptureGroup } from '@/api/capture-groups'
+import { listAllCaptureGroupSummaries, type CaptureGroup } from '@/api/capture-groups'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
@@ -56,11 +58,63 @@ function CaptureGroupHeaderStatus({ group }: { group: CaptureGroup }) {
 export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
   const { session } = useAuth()
+  const { message } = AntdApp.useApp()
   const location = useLocation()
   const navigate = useNavigate()
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
   const [isReceiptConfirmationOpen, setIsReceiptConfirmationOpen] = useState(false)
   const [isReceiptFinalizePending, setIsReceiptFinalizePending] = useState(false)
+  const [isDownloadingHdf5, setIsDownloadingHdf5] = useState(false)
+  const [isDiscarding, setIsDiscarding] = useState(false)
+
+  const handleDownloadHdf5 = useCallback(async () => {
+    if (isDownloadingHdf5) return
+    setIsDownloadingHdf5(true)
+    try {
+      const fileName = await triggerHdf5Download(projectId, [captureGroupId])
+      void message.success(`已开始下载 ${fileName}。`)
+    } catch (error) {
+      void message.error(
+        error instanceof Error ? error.message : 'HDF5 导出失败，请重试。',
+      )
+    } finally {
+      setIsDownloadingHdf5(false)
+    }
+  }, [captureGroupId, isDownloadingHdf5, message, projectId])
+
+  const handleQuickDiscardAndNext = useCallback(async () => {
+    if (isDiscarding) return
+    setIsDiscarding(true)
+    try {
+      const list = await listAllCaptureGroupSummaries(projectId)
+      const currentIndex = list.findIndex(
+        (item) => item.capture_group_id === captureGroupId || item.capture_group_key === captureGroupId,
+      )
+      const nextGroup = list[currentIndex + 1] ?? list[currentIndex - 1] ?? null
+
+      const response = await fetch('/api/dev/clean-capture-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ captureGroupId }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error ?? '清理请求失败')
+      }
+
+      void message.success('已废弃并删除该视频，已为您切换至下一条。')
+      if (nextGroup && nextGroup.capture_group_id !== captureGroupId) {
+        void navigate(paths.captureGroup(projectId, nextGroup.capture_group_id), { replace: true })
+      } else {
+        void navigate(paths.captureGroups(projectId), { replace: true })
+      }
+    } catch (error) {
+      void message.error(`清理失败: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsDiscarding(false)
+    }
+  }, [captureGroupId, isDiscarding, message, navigate, projectId])
+
   const receiptFinalizeRequest = useRef(false)
   const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
   const appliedFocus = useRef<string | null>(null)
@@ -460,6 +514,33 @@ export default function CaptureGroupDetailView() {
             >
               返回视频列表
             </Button>
+            {!isHumanAnnotationExportReady(humanTask) ? (
+              <Popconfirm
+                title="废弃并删除当前视频？"
+                description="该操作将彻底清理当前视频及其关联的标注、AI与质检数据，并自动跳至下一条视频。无法撤销。"
+                okText="确认废弃"
+                cancelText="取消"
+                okButtonProps={{ danger: true, loading: isDiscarding }}
+                onConfirm={() => void handleQuickDiscardAndNext()}
+              >
+                <Button
+                  danger
+                  icon={<Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />}
+                  loading={isDiscarding}
+                >
+                  废弃并查看下一条
+                </Button>
+              </Popconfirm>
+            ) : null}
+            {isHumanAnnotationExportReady(humanTask) ? (
+              <Button
+                icon={<Download aria-hidden="true" size={14} strokeWidth={1.8} />}
+                loading={isDownloadingHdf5}
+                onClick={() => void handleDownloadHdf5()}
+              >
+                下载 HDF5
+              </Button>
+            ) : null}
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
                 ref={receiptFinalizeTrigger}
@@ -536,6 +617,7 @@ export default function CaptureGroupDetailView() {
                 <CaptureGroupFocusedView
                   viewRows={viewRows}
                   viewState={viewState}
+                  projectId={projectId}
                   task={humanTask}
                   externalVideoRef={videoRef}
                   initialPlaybackTimeMs={preservedPlaybackTimeMs}

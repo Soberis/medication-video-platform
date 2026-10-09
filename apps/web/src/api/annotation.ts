@@ -448,6 +448,27 @@ export async function reviewAnnotationRevision(
   throw await annotationTaskApiError(response)
 }
 
+export async function reopenAnnotationTask(
+  projectId: string,
+  annotationTaskId: string,
+): Promise<AnnotationTask> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks/${encodeURIComponent(annotationTaskId)}/reopen`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as AnnotationTask
+  throw await annotationTaskApiError(response)
+}
+
 export async function downloadHumanDemonstrationHdf5(
   projectId: string,
   captureGroupIds?: string[],
