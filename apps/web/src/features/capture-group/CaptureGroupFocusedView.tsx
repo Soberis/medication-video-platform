@@ -1,5 +1,5 @@
-import { App as AntdApp, Button, Descriptions } from 'antd'
-import { RotateCcw, Video } from 'lucide-react'
+import { App as AntdApp, Button, Descriptions, Tooltip } from 'antd'
+import { Keyboard, RotateCcw, Video } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { retryHandPoseDetection } from '@/api/capture-groups'
@@ -305,36 +305,44 @@ export function CaptureGroupFocusedView({
           void startPlayback()
         }}
       />
-      {playbackState === 'ready' ? (
-        <div className="capture-group-playback-shortcuts" aria-label="播放器快捷键提示">
-          <span>
-            快捷键：<kbd className="capture-group-kbd">空格</kbd> /{' '}
-            <kbd className="capture-group-kbd">K</kbd> 播放暂停 ·{' '}
-            <kbd className="capture-group-kbd">←</kbd> / <kbd className="capture-group-kbd">→</kbd>{' '}
-            快退快进 · <kbd className="capture-group-kbd">J</kbd> /{' '}
-            <kbd className="capture-group-kbd">L</kbd> 步进 1 秒（按住{' '}
-            <kbd className="capture-group-kbd">Shift</kbd> 5 秒）
-          </span>
-        </div>
-      ) : null}
       {selectedDetail || selectedStream ? (
         <>
           <div className="capture-group-candidate-status-row">
-            <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
-              手部检测：{currentCandidateLiveStatus}
-            </StatusIndicator>
-            {currentCandidateTone === 'destructive' ||
-            candidateResponse?.job.status === 'FAILED' ||
-            candidateResponse?.job.hand_result === 'NO_HAND_DETECTED' ? (
-              <Button
-                type="text"
-                size="small"
-                icon={<RotateCcw size={14} strokeWidth={1.8} />}
-                loading={isRetryingHandPose}
-                onClick={() => void handleRetryHandPose()}
-              >
-                重新检测手部
-              </Button>
+            <div className="capture-group-candidate-status-left">
+              <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
+                手部检测：{currentCandidateLiveStatus}
+              </StatusIndicator>
+              {currentCandidateTone === 'destructive' ||
+              candidateResponse?.job.status === 'FAILED' ||
+              candidateResponse?.job.hand_result === 'NO_HAND_DETECTED' ? (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<RotateCcw size={14} strokeWidth={1.8} />}
+                  loading={isRetryingHandPose}
+                  onClick={() => void handleRetryHandPose()}
+                >
+                  重新检测
+                </Button>
+              ) : null}
+            </div>
+            {playbackState === 'ready' ? (
+              <div className="capture-group-playback-shortcuts" aria-label="播放器快捷键提示">
+                <Tooltip
+                  title={
+                    <div style={{ lineHeight: 1.6, fontSize: '12px' }}>
+                      <div><b>空格</b> / <b>K</b>：播放 / 暂停</div>
+                      <div><b>←</b> / <b>→</b>：快退 / 快进 1 秒</div>
+                      <div><b>J</b> / <b>L</b>：步进 1 秒（Shift 5 秒）</div>
+                    </div>
+                  }
+                >
+                  <span className="capture-group-shortcut-pill">
+                    <Keyboard size={13} strokeWidth={1.8} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                    快捷键
+                  </span>
+                </Tooltip>
+              </div>
             ) : null}
           </div>
           <details

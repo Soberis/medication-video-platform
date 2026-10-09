@@ -270,6 +270,14 @@ export function PlaybackCard({
                 >
                   {isFullscreen ? '退出全屏' : '全屏查看'}
                 </Button>
+                <Button
+                  className="video-stage-fullscreen-button"
+                  size="small"
+                  aria-label="关闭视频预览"
+                  onClick={onClose}
+                >
+                  关闭
+                </Button>
               </div>
             </div>
           ) : null}
@@ -278,14 +286,13 @@ export function PlaybackCard({
               {fullscreenError}
             </p>
           ) : null}
-          <div className="playback-toolbar">
-            {playbackFailed ? (
+          {playbackFailed ? (
+            <div className="playback-toolbar">
               <Button type="primary" loading={isRequestingPlayback} onClick={onStartPlayback}>
                 重新加载视频
               </Button>
-            ) : null}
-            <Button onClick={onClose}>关闭视频</Button>
-          </div>
+            </div>
+          ) : null}
         </>
       ) : null}
       {mediaProbeMessage ? (

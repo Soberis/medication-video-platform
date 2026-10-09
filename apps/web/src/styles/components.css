@@ -1456,7 +1456,8 @@
   position: relative;
   width: min(100%, var(--video-stage-width, 100%));
   height: auto;
-  max-height: var(--video-stage-height, min(540px, max(280px, calc(100vh - 300px))));
+  min-height: 360px;
+  max-height: var(--video-stage-height, min(720px, max(360px, calc(100vh - 220px))));
   aspect-ratio: var(--video-stage-ratio, 16 / 9);
   margin-top: var(--app-space-12);
   overflow: hidden;
@@ -1522,6 +1523,9 @@
   z-index: 2;
   top: var(--app-space-12);
   right: var(--app-space-12);
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
 }
 
 .video-stage-fullscreen-button {

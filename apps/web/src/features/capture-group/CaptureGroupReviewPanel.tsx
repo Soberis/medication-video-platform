@@ -386,9 +386,10 @@ export function CaptureGroupReviewPanel({
               size="small"
               icon={<Download size={14} strokeWidth={2} />}
               loading={isDownloadingHdf5}
+              aria-label="下载当前组 HDF5"
               onClick={() => void handleDownloadHdf5()}
             >
-              下载当前组 HDF5
+              下载 HDF5
             </Button>
             <Popconfirm
               title="重新编辑此视频标注？"

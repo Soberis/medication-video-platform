@@ -20,8 +20,8 @@
   box-sizing: border-box;
   overflow: hidden;
   aspect-ratio: 16 / 9;
-  min-height: 280px;
-  max-height: 520px;
+  min-height: 380px;
+  max-height: min(720px, calc(100vh - 220px));
   padding: var(--app-space-24);
   border: 1px solid var(--app-color-media-stage-border, #1f2937);
   border-radius: var(--app-radius-lg, 10px);

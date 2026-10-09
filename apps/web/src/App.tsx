@@ -68,7 +68,21 @@ export default function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const { projectId = '' } = useParams()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('mvp:sidebar_collapsed') === 'true'
+    } catch {
+      return false
+    }
+  })
+  const handleSidebarCollapsedChange = (collapsed: boolean) => {
+    setSidebarCollapsed(collapsed)
+    try {
+      localStorage.setItem('mvp:sidebar_collapsed', String(collapsed))
+    } catch {
+      // ignore
+    }
+  }
   const isAdministrator = auth.session?.role === 'ADMIN'
 
   useEffect(() => {
@@ -128,7 +142,7 @@ export default function AppShell() {
       sidebar={
         <Sidebar
           collapsed={sidebarCollapsed}
-          onCollapsedChange={setSidebarCollapsed}
+          onCollapsedChange={handleSidebarCollapsedChange}
           brand={
             <Link className="app-brand" to={paths.projects} aria-label="返回项目列表">
               <div className="app-brand-badge" aria-hidden="true">

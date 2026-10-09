@@ -93,13 +93,19 @@
 .capture-group-workspace {
   display: grid;
   grid-template-areas: 'video action';
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 440px);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
   width: 100%;
   min-width: 0;
   max-width: 100%;
   align-items: start;
   gap: var(--app-space-16);
   margin-top: var(--app-space-12);
+}
+
+@media (min-width: 1200px) {
+  .capture-group-workspace {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
 }
 
 .capture-group-video-column,
@@ -1680,15 +1686,40 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: var(--app-space-12);
-  padding: var(--app-space-8) var(--app-space-12);
+  padding: var(--app-space-6) var(--app-space-12);
   margin-top: var(--app-space-8);
   margin-bottom: var(--app-space-4);
   background: var(--app-color-surface);
   border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-md);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.capture-group-candidate-status-left {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+}
+
+.capture-group-shortcut-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  font-size: var(--app-font-size-helper, 12px);
+  color: var(--app-color-foreground-muted);
+  background: var(--app-color-surface-hover, #f1f5f9);
+  border: 1px solid var(--app-color-border-subtle, #e2e8f0);
+  border-radius: var(--app-radius-sm, 4px);
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--app-transition-quick, 0.15s ease);
+}
+
+.capture-group-shortcut-pill:hover {
+  color: var(--app-color-primary);
+  border-color: var(--app-color-primary-subtle, #bfdbfe);
+  background: var(--app-color-surface);
 }
 
 .capture-group-inspector-status {

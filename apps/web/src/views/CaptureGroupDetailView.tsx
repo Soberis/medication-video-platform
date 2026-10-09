@@ -604,11 +604,12 @@ export default function CaptureGroupDetailView() {
           <>
             <Button
               icon={<ArrowLeft aria-hidden="true" size={14} strokeWidth={1.8} />}
+              aria-label="返回视频列表"
               onClick={() =>
                 void navigate(paths.captureGroups(projectId), { state: location.state })
               }
             >
-              返回视频列表
+              返回列表
             </Button>
             <div className="capture-group-pipeline-stepper" role="group" aria-label="视频序列导航">
               <Button
@@ -674,8 +675,9 @@ export default function CaptureGroupDetailView() {
                   danger
                   icon={<Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />}
                   loading={isDiscarding}
+                  title="彻底清理当前视频并自动跳至下一条"
                 >
-                  废弃并查看下一条
+                  废弃并下一条
                 </Button>
               </Popconfirm>
             ) : null}
