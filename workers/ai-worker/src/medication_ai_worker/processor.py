@@ -191,7 +191,9 @@ class Processor:
                 DeadLetterReason.LEASE_REJECTED,
                 stale_is_reject=False,
             )
-        except (OSError, RuntimeError, ValueError):
+        except Exception:
+            import gc
+            gc.collect()
             LOGGER.exception(
                 "AI inference failed; submitting a terminal Worker failure job_id=%s", job.job_id
             )

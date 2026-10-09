@@ -8,6 +8,7 @@ from typing import Any
 
 import av
 import mediapipe as mp
+import numpy as np
 
 ALGORITHM_KEY = "MEDIAPIPE_HAND_LANDMARKER"
 ALGORITHM_VERSION = "v1"
@@ -107,9 +108,18 @@ def _detect_all(
             next_sample += ((timestamp - next_sample) // sample_interval + 1) * sample_interval
             inference_frame_count += 1
             rgb = frame.to_ndarray(format="rgb24")
-            result = detector.detect_for_video(
-                mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), timestamp
-            )
+            if isinstance(rgb, np.ndarray):
+                if not rgb.flags.c_contiguous:
+                    rgb = np.ascontiguousarray(rgb, dtype=np.uint8)
+                else:
+                    rgb = np.require(rgb, dtype=np.uint8, requirements=["C", "A"])
+            try:
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            except OSError:
+                invalid_hand_frame_count += 1
+                frames_without_hand += 1
+                continue
+            result = detector.detect_for_video(mp_image, timestamp)
             frame_candidates: list[dict[str, object]] = []
             frame_left_count = 0
             frame_right_count = 0
@@ -220,6 +230,10 @@ def _detect_all(
                 # hand/no-hand counts.  A true no-hand observation is only an
                 # empty, structurally valid detector result.
                 frames_without_hand += 1
+            del rgb
+            if inference_frame_count % 100 == 0:
+                import gc
+                gc.collect()
 
     return InferenceSummary(
         total_video_frames=total_video_frames,
