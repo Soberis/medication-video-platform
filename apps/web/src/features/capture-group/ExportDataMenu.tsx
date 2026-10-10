@@ -1,18 +1,28 @@
 import { App as AntdApp, Button, Checkbox, Modal, Table } from 'antd'
 import { Download } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   AnnotationTaskApiError,
   listAnnotationTasks,
 } from '@/api/annotation'
-import { listAllCaptureGroupSummaries, type CaptureGroupSummary } from '@/api/capture-groups'
+import {
+  listAllCaptureGroupSummaries,
+  type CaptureGroupPipelineItem,
+  type CaptureGroupSummary,
+} from '@/api/capture-groups'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { triggerHdf5Download } from '@/features/capture-group/export-hdf5'
 import { isHumanAnnotationExportReady } from '@/features/capture-group-presentation'
 import { formatDateTime, parseAssetIdentity, shortId } from '@/features/catalog/catalog-presentation'
 
-export function ExportDataMenu({ projectId }: { projectId: string }) {
+export function ExportDataMenu({
+  projectId,
+  pipelineItems = {},
+}: {
+  projectId: string
+  pipelineItems?: Record<string, CaptureGroupPipelineItem>
+}) {
   const { message } = AntdApp.useApp()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -70,8 +80,27 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
     setOpen(false)
   }
 
-  const exportableIds = rows.map((row) => row.capture_group_id)
-  const selectedExportIds = exportableIds.filter((id) => selectedIds.has(id))
+  const isRowExportable = (row: CaptureGroupSummary) => {
+    const item = pipelineItems[row.capture_group_id]
+    if (!item) return true
+    if (
+      item.pipeline_status === 'NO_HAND' ||
+      item.pipeline_status === 'FAILED' ||
+      item.pipeline_status === 'NO_ACTION' ||
+      item.mp_hand_result === 'NO_HAND_DETECTED'
+    ) {
+      return false
+    }
+    return true
+  }
+
+  // 严格过滤：仅收录已核准且已检出双手骨骼的真正可导出数据
+  const exportableRows = useMemo(() => rows.filter(isRowExportable), [rows, pipelineItems])
+  const exportableIds = useMemo(() => exportableRows.map((row) => row.capture_group_id), [exportableRows])
+  const selectedExportIds = useMemo(
+    () => exportableIds.filter((id) => selectedIds.has(id)),
+    [exportableIds, selectedIds],
+  )
   const allChecked = exportableIds.length > 0 && exportableIds.every((id) => selectedIds.has(id))
   const indeterminate =
     selectedExportIds.length > 0 && selectedExportIds.length < exportableIds.length
@@ -129,14 +158,14 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                 <span className="capture-group-export-selected-count" role="status">
                   已选择 {selectedExportIds.length} 条
                 </span>
-                {rows.length > 0 ? (
+                {exportableRows.length > 0 ? (
                   <span className="export-modal-total-hint">
-                    / 共 {rows.length} 条
+                    / 共 {exportableRows.length} 条可导出数据
                   </span>
                 ) : null}
               </div>
               <span className="export-modal-subhint">
-                仅导出勾选记录；下载时仍会检查当前媒体与标注来源是否有效。
+                仅包含动作与双手骨骼双合格的合规演示数据。
               </span>
             </div>
             <div className="capture-group-export-modal-actions">
@@ -181,8 +210,8 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                 rowClassName={(row) =>
                   selectedIds.has(row.capture_group_id) ? 'is-selected ant-table-row-selected' : ''
                 }
-                dataSource={rows}
-                scroll={rows.length > 5 ? { y: 270 } : undefined}
+                dataSource={exportableRows}
+                scroll={exportableRows.length > 5 ? { y: 270 } : undefined}
                 locale={{ emptyText: '当前项目暂无已完成并通过确认的人工标注数据。' }}
                 onRow={(row) => ({
                   onClick: (event) => {
@@ -234,7 +263,6 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                       const asset = parseAssetIdentity(row.capture_group_key, row.capture_group_id)
                       return (
                         <span className="capture-group-export-key" title={`完整标识: ${asset.fullKey}`}>
-                          {asset.platform ? <span className="export-key-tag">{asset.platform}</span> : null}
                           <span className="export-key-code">{asset.shortCode}</span>
                         </span>
                       )

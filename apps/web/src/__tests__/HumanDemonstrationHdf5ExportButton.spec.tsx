@@ -168,7 +168,7 @@ describe('project HDF5 selection', () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
     renderExport()
     await user.click(screen.getByRole('button', { name: '导出数据' }))
-    await screen.findByText('当前项目暂无已完成并通过确认的人工标注数据。')
+    await screen.findByText(/当前项目暂无/)
     expect(screen.getByRole('button', { name: '下载 HDF5' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: '取消' }))
     await user.click(screen.getByRole('button', { name: '导出数据' }))
@@ -218,4 +218,39 @@ describe('project HDF5 selection', () => {
       listAllCaptureGroupSummaries(projectId, new AbortController().signal),
     ).rejects.toThrow('项目候选列表读取未完成')
   })
+
+  it('excludes videos without hand pose from export selection and only renders exportable rows', async () => {
+    const user = userEvent.setup()
+    stubCandidates()
+    render(
+      <AntdApp>
+        <ExportDataMenu
+          projectId={projectId}
+          pipelineItems={{
+            [groups[0]!.capture_group_id]: {
+              pipeline_status: 'NO_HAND',
+              mp_status: 'SUCCEEDED',
+              mp_hand_result: 'NO_HAND_DETECTED',
+              qw_status: null,
+              action_candidate_count: 2,
+            },
+          }}
+        />
+      </AntdApp>,
+    )
+    await user.click(screen.getByRole('button', { name: '导出数据' }))
+    const dialog = screen.getByRole('dialog', { name: '导出数据' })
+    await within(dialog).findByRole('checkbox', { name: '选择导出 视频 2' })
+    
+    // Video 1 without hand pose is completely excluded from the dialog
+    expect(within(dialog).queryByText('视频 1')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('未检出手部')).not.toBeInTheDocument()
+
+    // Clicking 全选 only selects exportable rows (videos 2 and 3)
+    await user.click(within(dialog).getByRole('checkbox', { name: '全选' }))
+    expect(within(dialog).getByText('已选择 2 条')).toBeInTheDocument()
+    expect(within(dialog).getByRole('checkbox', { name: '选择导出 视频 2' })).toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: '选择导出 视频 3' })).toBeChecked()
+  })
 })
+

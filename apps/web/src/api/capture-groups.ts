@@ -257,7 +257,13 @@ async function toCaptureGroupError(response: Response) {
   )
 }
 
-export type CaptureGroupPipelineStatus = 'READY' | 'PROCESSING' | 'NO_HAND' | 'FAILED' | 'PENDING'
+export type CaptureGroupPipelineStatus =
+  | 'READY'
+  | 'PROCESSING'
+  | 'NO_HAND'
+  | 'NO_ACTION'
+  | 'FAILED'
+  | 'PENDING'
 
 export interface CaptureGroupPipelineStats {
   total: number

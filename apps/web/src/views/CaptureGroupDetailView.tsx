@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Modal, Popconfirm, Skeleton } from 'antd'
+import { Alert, App as AntdApp, Button, Modal, Popconfirm, Skeleton, Tooltip } from 'antd'
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
@@ -82,13 +82,30 @@ export default function CaptureGroupDetailView() {
     }
   }, [captureGroupId, isDownloadingHdf5, message, projectId])
 
+  const listState = (location.state as {
+    captureGroupList?: {
+      rows?: CaptureGroupSummary[]
+      filteredRows?: CaptureGroupSummary[]
+      filterLabel?: string
+      activeView?: string
+    }
+  })?.captureGroupList
+
+  const filterLabel = listState?.filterLabel ?? ''
+
   const [summaries, setSummaries] = useState<CaptureGroupSummary[]>(() => {
-    const stateRows = (location.state as { captureGroupList?: { rows: CaptureGroupSummary[] } })
-      ?.captureGroupList?.rows
-    return Array.isArray(stateRows) ? stateRows : []
+    const queue = listState?.filteredRows ?? listState?.rows
+    return Array.isArray(queue) ? queue : []
   })
 
   useEffect(() => {
+    // 关键约束：若从列表页带入了筛选队列（如未检测手部、可导出等子集），
+    // 必须严格在该范围内切片导航，绝不能用全量项目列表进行覆盖！
+    const queue = listState?.filteredRows ?? listState?.rows
+    if (Array.isArray(queue) && queue.length > 0) {
+      return
+    }
+
     let cancelled = false
     void listAllCaptureGroupSummaries(projectId)
       .then((list) => {
@@ -100,7 +117,7 @@ export default function CaptureGroupDetailView() {
     return () => {
       cancelled = true
     }
-  }, [projectId])
+  }, [projectId, listState?.filteredRows, listState?.rows])
 
   const { prevGroup, nextGroup, currentNumber, totalCount } = useMemo(() => {
     if (!summaries.length) {
@@ -177,20 +194,34 @@ export default function CaptureGroupDetailView() {
 
       void message.success('已废弃并删除该视频，已为您切换至下一条。')
       if (nextTarget && nextTarget.capture_group_id !== captureGroupId) {
-        setSummaries((prev) => prev.filter((item) => item.capture_group_id !== captureGroupId))
+        const remainingSummaries = summaries.filter((item) => item.capture_group_id !== captureGroupId)
+        setSummaries(remainingSummaries)
+
+        const nextState = {
+          ...location.state,
+          captureGroupList: listState
+            ? {
+                ...listState,
+                rows: Array.isArray(listState.rows)
+                  ? listState.rows.filter((item) => item.capture_group_id !== captureGroupId)
+                  : [],
+                filteredRows: remainingSummaries,
+              }
+            : undefined,
+        }
         void navigate(paths.captureGroup(projectId, nextTarget.capture_group_id), {
           replace: true,
-          state: location.state,
+          state: nextState,
         })
       } else {
-        void navigate(paths.captureGroups(projectId), { replace: true })
+        void navigate(paths.captureGroups(projectId), { replace: true, state: location.state })
       }
     } catch (error) {
       void message.error(`清理失败: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsDiscarding(false)
     }
-  }, [captureGroupId, isDiscarding, location.state, message, navigate, projectId, summaries])
+  }, [captureGroupId, isDiscarding, listState, location.state, message, navigate, projectId, summaries])
 
 
   const receiptFinalizeRequest = useRef(false)
@@ -452,6 +483,10 @@ export default function CaptureGroupDetailView() {
     [rawIdentity],
   )
 
+  const isHandPoseMissing =
+    viewState.candidateResponse?.job.hand_result === 'NO_HAND_DETECTED' ||
+    viewState.candidateResponse?.job.status === 'FAILED'
+
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -516,6 +551,7 @@ export default function CaptureGroupDetailView() {
               ?.clip_asset_id
             if (clipAssetId) handleSelectView(clipAssetId)
           }}
+          hasHandPose={!isHandPoseMissing}
         />
       )
     }
@@ -552,6 +588,7 @@ export default function CaptureGroupDetailView() {
         onDirtyChange={setHasUnsavedAnnotation}
         onTaskChange={data.setTask}
         onRefresh={data.refresh}
+        isAdmin={session?.role === 'ADMIN'}
       />
     )
   }
@@ -580,41 +617,31 @@ export default function CaptureGroupDetailView() {
         <span className="breadcrumb-separator" aria-hidden="true">
           /
         </span>
-        <span>
-          {parsedIdentity.platform ? `[${parsedIdentity.platform}] ` : ''}
-          {parsedIdentity.shortCode}
-        </span>
+        <span>详情</span>
       </ProjectBreadcrumb>
       <PageHeader
         className="capture-group-page-header capture-group-detail-header"
         titleId="capture-group-detail-title"
         eyebrow="采集记录"
-        title={
-          parsedIdentity.platform ? (
-            <span className="capture-group-header-title">
-              <span className="export-key-tag">{parsedIdentity.platform}</span>
-              <span className="capture-group-header-code">{parsedIdentity.shortCode}</span>
-            </span>
-          ) : (
-            eventIdentity
-          )
-        }
+        title={parsedIdentity.shortCode || eventIdentity}
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
             <Button
               icon={<ArrowLeft aria-hidden="true" size={14} strokeWidth={1.8} />}
               aria-label="返回视频列表"
+              title="返回视频列表"
               onClick={() =>
                 void navigate(paths.captureGroups(projectId), { state: location.state })
               }
             >
-              返回列表
+              返回
             </Button>
             <div className="capture-group-pipeline-stepper" role="group" aria-label="视频序列导航">
               <Button
                 icon={<ChevronLeft aria-hidden="true" size={14} strokeWidth={1.8} />}
                 disabled={!prevGroup}
+                aria-label="上一条"
                 title={
                   prevGroup
                     ? `上一条 (Alt+←)：${parseAssetIdentity(prevGroup.capture_group_key).shortCode}`
@@ -627,19 +654,20 @@ export default function CaptureGroupDetailView() {
                     })
                   }
                 }}
-              >
-                上一条
-              </Button>
+              />
               {currentNumber && totalCount ? (
                 <span
                   className="pipeline-stepper-counter"
-                  title={`当前第 ${currentNumber} 条，共 ${totalCount} 条`}
+                  title={`${filterLabel ? `[${filterLabel}] ` : ''}当前第 ${currentNumber} 条，共 ${totalCount} 条`}
                 >
+                  {filterLabel ? <span style={{ fontWeight: 600, marginRight: 4 }}>{filterLabel} ·</span> : null}
                   {currentNumber} / {totalCount}
                 </span>
               ) : null}
               <Button
+                icon={<ChevronRight aria-hidden="true" size={14} strokeWidth={1.8} />}
                 disabled={!nextGroup}
+                aria-label="下一条"
                 title={
                   nextGroup
                     ? `下一条 (Alt+→)：${parseAssetIdentity(nextGroup.capture_group_key).shortCode}`
@@ -652,44 +680,46 @@ export default function CaptureGroupDetailView() {
                     })
                   }
                 }}
-              >
-                下一条
-                <ChevronRight
-                  aria-hidden="true"
-                  size={14}
-                  strokeWidth={1.8}
-                  style={{ marginLeft: 4, verticalAlign: 'middle' }}
-                />
-              </Button>
+              />
             </div>
-            {!isHumanAnnotationExportReady(humanTask) ? (
-              <Popconfirm
-                title="废弃并删除当前视频？"
-                description="该操作将彻底清理当前视频及其关联的标注、AI与质检数据，并自动跳至下一条视频。无法撤销。"
-                okText="确认废弃"
-                cancelText="取消"
-                okButtonProps={{ danger: true, loading: isDiscarding }}
-                onConfirm={() => void handleQuickDiscardAndNext()}
-              >
-                <Button
-                  danger
-                  icon={<Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />}
-                  loading={isDiscarding}
-                  title="彻底清理当前视频并自动跳至下一条"
-                >
-                  废弃并下一条
-                </Button>
-              </Popconfirm>
-            ) : null}
+            <span className="capture-group-header-actions-divider" aria-hidden="true" />
             {isHumanAnnotationExportReady(humanTask) ? (
-              <Button
-                icon={<Download aria-hidden="true" size={14} strokeWidth={1.8} />}
-                loading={isDownloadingHdf5}
-                onClick={() => void handleDownloadHdf5()}
+              <Tooltip
+                title={
+                  isHandPoseMissing
+                    ? '当前视频未检出有效手部骨骼样本，无法导出 HDF5 模仿学习数据'
+                    : undefined
+                }
               >
-                下载 HDF5
-              </Button>
+                <span>
+                  <Button
+                    icon={<Download aria-hidden="true" size={14} strokeWidth={1.8} />}
+                    loading={isDownloadingHdf5}
+                    disabled={isHandPoseMissing}
+                    onClick={() => void handleDownloadHdf5()}
+                  >
+                    下载 HDF5
+                  </Button>
+                </span>
+              </Tooltip>
             ) : null}
+            <Popconfirm
+              title="废弃并删除当前视频？"
+              description="该操作将彻底清理当前视频及其关联的标注、AI与质检数据，并自动跳至下一条视频。无法撤销。"
+              okText="确认废弃"
+              cancelText="取消"
+              okButtonProps={{ danger: true, loading: isDiscarding }}
+              onConfirm={() => void handleQuickDiscardAndNext()}
+            >
+              <Button
+                danger
+                icon={<Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />}
+                loading={isDiscarding}
+                title="彻底清理当前视频并自动跳至下一条"
+              >
+                废弃并下一条
+              </Button>
+            </Popconfirm>
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
                 ref={receiptFinalizeTrigger}
@@ -703,6 +733,9 @@ export default function CaptureGroupDetailView() {
             <RefreshButton
               loading={data.groupLoadState === 'loading'}
               onClick={() => void data.refresh()}
+              label={null}
+              title="刷新当前数据"
+              aria-label="刷新"
             />
           </>
         }

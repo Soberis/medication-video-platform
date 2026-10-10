@@ -10,10 +10,9 @@
 }
 
 .playback-idle-stage {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: var(--app-space-16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -22,70 +21,93 @@
   aspect-ratio: 16 / 9;
   min-height: 380px;
   max-height: min(720px, calc(100vh - 220px));
-  padding: var(--app-space-24);
-  border: 1px solid var(--app-color-media-stage-border, #1f2937);
-  border-radius: var(--app-radius-lg, 10px);
-  background: var(--app-color-media-stage-background, #0b0f17);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--app-color-border-subtle, #1e293b);
+  border-radius: var(--app-radius-lg, 8px);
+  background: #090d16;
   text-align: center;
   position: relative;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.2s ease;
 }
 
-.playback-idle-icon {
+.playback-idle-stage:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.playback-minimal-play-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 20px;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.playback-minimal-play-btn:focus-visible {
+  outline: 2px solid var(--app-color-primary, #38bdf8);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+.playback-play-circle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 58px;
-  height: 58px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-  transition: transform var(--app-transition-quick, 0.15s ease), background 0.15s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.playback-idle-stage:hover .playback-idle-icon {
-  transform: scale(1.05);
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--app-color-primary, #315e9b);
+.playback-play-triangle {
+  margin-left: 4px;
 }
 
-.playback-idle-stage.playback-availability-warning .playback-idle-icon {
-  color: #fbbf24;
-  border-color: rgba(251, 191, 36, 0.3);
-  background: rgba(251, 191, 36, 0.1);
+.playback-play-caption {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.02em;
+  transition: color 0.2s ease;
 }
 
-.playback-idle-stage.playback-availability-error .playback-idle-icon {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.3);
-  background: rgba(248, 113, 113, 0.1);
+.playback-idle-stage:hover .playback-play-circle,
+.playback-minimal-play-btn:hover .playback-play-circle {
+  transform: scale(1.08);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 
-.playback-idle-copy {
-  display: grid;
-  justify-items: center;
-  gap: var(--app-space-6);
-  max-width: 500px;
-}
-
-.playback-idle-copy strong {
+.playback-idle-stage:hover .playback-play-caption,
+.playback-minimal-play-btn:hover .playback-play-caption {
   color: #ffffff;
-  font-size: 16px;
-  font-weight: var(--app-font-weight-semibold);
-  letter-spacing: -0.01em;
 }
 
-.playback-idle-copy > span:last-child {
-  color: rgba(255, 255, 255, 0.65);
-  font-size: var(--app-font-size-body);
-  line-height: var(--app-line-height-body-text);
+.playback-idle-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
 }
 
-.playback-idle-stage .playback-start-action {
-  margin: 0;
-  font-weight: var(--app-font-weight-medium);
+.playback-idle-notice strong {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .playback-idle-stage.playback-availability-warning {

@@ -16,6 +16,7 @@ import {
   updateAnnotationCameraView,
   submitAnnotationRevision,
   reviewAnnotationRevision,
+  type AnnotationCameraView,
   type AnnotationCorrespondence,
   type AnnotationLabelSchema,
   type GroupAnnotationDocument,
@@ -64,6 +65,7 @@ interface CaptureGroupAnnotationPanelProps {
   onDirtyChange?: (dirty: boolean) => void
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
   canPrepareTask?: boolean
+  isAdmin?: boolean
 }
 
 interface CameraDraftState {
@@ -124,13 +126,17 @@ function ReadonlyGroupRevision({
     <ol className="capture-group-readonly-segments">
       {document.camera_views.flatMap((view) => {
         const viewSummary = (
-          <li key={`camera-${view.camera_number}`}>
-            <span>机位 {view.camera_number}</span>
+          <li key={`camera-${view.camera_number}`} className="capture-group-readonly-summary-card">
+            <div className="capture-group-readonly-header">
+              <span className="capture-group-readonly-camera">机位 {view.camera_number}</span>
+              <span className={`capture-group-readonly-status-tag ${view.included ? 'is-included' : 'is-excluded'}`}>
+                {view.included ? '已提交' : '已排除'}
+              </span>
+            </div>
             <div className="capture-group-readonly-time">
-              <strong>{view.included ? '已提交' : '已排除'}</strong>
+              <span>{view.segments.length ? `${view.segments.length} 段动作` : '无动作片段'}</span>
               {view.exclusion_reason ? <small>原因：{view.exclusion_reason}</small> : null}
             </div>
-            <span>{view.segments.length ? `${view.segments.length} 段动作` : '无动作片段'}</span>
           </li>
         )
         const segmentRows = view.segments.map((segment, index) => {
@@ -140,10 +146,15 @@ function ReadonlyGroupRevision({
           const formattedStart = formatAnnotationTime(segment.start_ms)
           const formattedEnd = formatAnnotationTime(segment.end_ms)
           return (
-            <li key={`${view.camera_number}-${segment.segment_id}`}>
-              <span>
-                机位 {view.camera_number} · 时间段 {index + 1}
-              </span>
+            <li key={`${view.camera_number}-${segment.segment_id}`} className="capture-group-readonly-segment-card">
+              <div className="capture-group-readonly-header">
+                <span className="capture-group-readonly-camera">
+                  机位 {view.camera_number} · 时间段 {index + 1}
+                </span>
+                <span className="capture-group-readonly-action-badge">
+                  {getActionDisplayName(segment.label, schema)}
+                </span>
+              </div>
               <div className="capture-group-readonly-time">
                 <strong>
                   {formattedStart && formattedEnd
@@ -153,11 +164,10 @@ function ReadonlyGroupRevision({
                 <small>
                   原始值：{segment.start_ms}–{segment.end_ms} 毫秒（本机位时间轴）
                 </small>
+                {correspondence?.status === 'CONFIRMED' ? (
+                  <small className="capture-group-readonly-confirmed">已确认跨机位对应</small>
+                ) : null}
               </div>
-              <span>
-                {getActionDisplayName(segment.label, schema)}
-                {correspondence?.status === 'CONFIRMED' ? <small>已确认跨机位对应</small> : null}
-              </span>
             </li>
           )
         })
@@ -186,8 +196,10 @@ export function CaptureGroupAnnotationPanel({
   canPrepareTask = false,
   activeCameraNumber,
   activeClipAssetId,
+  isAdmin = false,
 }: CaptureGroupAnnotationPanelProps) {
   const { message } = AntdApp.useApp()
+  const canQuickApprove = Boolean(isAdmin || task?.can_review)
   const [cameraDrafts, setCameraDrafts] = useState<Record<string, CameraDraftState>>({})
   const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
@@ -220,6 +232,7 @@ export function CaptureGroupAnnotationPanel({
   } | null>(null)
   const [isExcludeModalOpen, setIsExcludeModalOpen] = useState(false)
   const [excludeModalReason, setExcludeModalReason] = useState('')
+  const [isNoteOpen, setIsNoteOpen] = useState(false)
 
   function recordInputVersionConflict(error: unknown) {
     if (!isInputRefreshError(error)) return false
@@ -230,8 +243,10 @@ export function CaptureGroupAnnotationPanel({
     return true
   }
 
-  function buildIndependentCorrespondences(): AnnotationCorrespondence[] {
-    const submittedViews = cameraViews.filter((view) => view.state === 'SUBMITTED')
+  function buildIndependentCorrespondences(
+    sourceViews: AnnotationCameraView[] = cameraViews,
+  ): AnnotationCorrespondence[] {
+    const submittedViews = sourceViews.filter((view) => view.state === 'SUBMITTED')
     const reason =
       submittedViews.length === 1 ? INDEPENDENT_SINGLE_VIEW_REASON : INDEPENDENT_TIMELINE_REASON
     return submittedViews.flatMap((view) =>
@@ -595,18 +610,18 @@ export function CaptureGroupAnnotationPanel({
     nextState: 'PENDING' | 'DRAFT' | 'SUBMITTED' | 'EXCLUDED',
     reason = '',
     customSegments?: DraftAnnotationSegment[],
-  ) {
+  ): Promise<AnnotationTask | null> {
     if (
       isSubmittingRevisionRef.current ||
       isSubmittingRevision ||
       inputVersionConflict ||
       !canUpdateCameraViews()
     ) {
-      return false
+      return null
     }
     if (contextChanged && nextState !== 'EXCLUDED' && nextState !== 'PENDING') {
       void message.warning('此机位已被更新，请先核对最新标注。')
-      return false
+      return null
     }
     const targetCameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
     const targetRow = viewRows.find((view) => view.cameraNumber === cameraNumber)
@@ -617,16 +632,16 @@ export function CaptureGroupAnnotationPanel({
 
     if (nextState !== 'EXCLUDED' && nextState !== 'PENDING' && !targetClipAssetId) {
       void message.warning('此机位没有可用视频，只能排除机位。')
-      return false
+      return null
     }
     if (nextState === 'EXCLUDED' && !reason.trim()) {
       void message.warning('请填写排除原因，便于后续复核追溯。')
-      return false
+      return null
     }
     if (nextState === 'SUBMITTED') {
       if (effectiveSegments.length === 0) {
         void message.warning('请至少添加一段动作后再提交机位；没有可确认动作时请排除机位。')
-        return false
+        return null
       }
       const errors = validateSegments(effectiveSegments, isActiveCamera ? totalDurationMs : null)
       if (Object.keys(errors).length) {
@@ -639,7 +654,7 @@ export function CaptureGroupAnnotationPanel({
             ...Object.fromEntries(Object.keys(errors).map((draftId) => [draftId, false])),
           },
         }))
-        return false
+        return null
       }
     }
 
@@ -692,7 +707,7 @@ export function CaptureGroupAnnotationPanel({
                 ? `机位 ${cameraNumber} 已恢复为草稿。`
                 : `机位 ${cameraNumber} 草稿已保存。`,
       )
-      return true
+      return updatedTask
     } catch (error) {
       if (
         error instanceof AnnotationTaskApiError &&
@@ -714,7 +729,7 @@ export function CaptureGroupAnnotationPanel({
             } else {
               void message.warning('此机位已被更新，已加载最新状态；请核对后再次确认。')
             }
-            return false
+            return null
           }
         } catch {
           // Keep the original conflict message when the current task cannot be loaded.
@@ -722,7 +737,7 @@ export function CaptureGroupAnnotationPanel({
       }
       recordInputVersionConflict(error)
       void message.error(error instanceof Error ? error.message : '机位标注未保存，请重试。')
-      return false
+      return null
     } finally {
       isSubmittingRevisionRef.current = false
       setIsSubmittingRevision(false)
@@ -748,6 +763,7 @@ export function CaptureGroupAnnotationPanel({
     if (event) event.preventDefault()
     if (isSubmittingRevisionRef.current || isSubmittingRevision || inputVersionConflict) return
 
+    let latestTask = task
     if (
       activeCameraNumber !== null &&
       canEditActiveCamera &&
@@ -756,12 +772,13 @@ export function CaptureGroupAnnotationPanel({
     ) {
       const activeDraft = getCameraDraft(activeCameraNumber)
       if (activeDraft.segments.length > 0) {
-        const saved = await saveCameraView(activeCameraNumber, 'SUBMITTED')
-        if (!saved) return
+        const savedTask = await saveCameraView(activeCameraNumber, 'SUBMITTED')
+        if (!savedTask) return
+        latestTask = savedTask
       }
     }
 
-    const targetTask = task
+    const targetTask = latestTask
     if (!targetTask) return
     const currentCameraViews = targetTask.camera_views ?? cameraViews
     const unreadyCameraNumbers = allCameraNumbers.filter((num) => {
@@ -779,7 +796,7 @@ export function CaptureGroupAnnotationPanel({
     isSubmittingRevisionRef.current = true
     setIsSubmittingRevision(true)
     try {
-      const finalCorrespondences = buildIndependentCorrespondences()
+      const finalCorrespondences = buildIndependentCorrespondences(currentCameraViews)
       const revision = await submitAnnotationRevision(projectId, targetTask.annotation_task_id, {
         expectedTaskVersion: targetTask.version,
         inputVersion: targetTask.group_input_version,
@@ -787,27 +804,32 @@ export function CaptureGroupAnnotationPanel({
         note: '',
       })
 
-      if (targetTask.can_review) {
-        await reviewAnnotationRevision(
-          projectId,
-          revision.annotation_revision_id,
-          'APPROVED',
-          '',
-          {
-            reviewedCameraNumbers: allCameraNumbers,
-            returnCameraNumbers: [],
-          },
-        )
-        const refreshed = await onRefresh()
-        void (refreshed
-          ? message.success('整组标注已确认并通过复核，随时可重新编辑。')
-          : message.warning('复核已通过，但最新事实暂未刷新；请手动刷新确认。'))
-      } else {
-        const refreshed = await onRefresh()
-        void (refreshed
-          ? message.success('整组多机位标注已提交，已进入待复核状态。')
-          : message.warning('修订已提交，但最新事实暂未刷新；请手动刷新确认。'))
+      if (canQuickApprove) {
+        try {
+          await reviewAnnotationRevision(
+            projectId,
+            revision.annotation_revision_id,
+            'APPROVED',
+            '',
+            {
+              reviewedCameraNumbers: allCameraNumbers,
+              returnCameraNumbers: [],
+            },
+          )
+          const refreshed = await onRefresh()
+          void (refreshed
+            ? message.success('标注已确认，已直接完成。随时可重新编辑。')
+            : message.warning('标注已确认，但最新事实暂未刷新；请手动刷新确认。'))
+          return
+        } catch (reviewError) {
+          console.warn('Auto review approval skipped:', reviewError)
+        }
       }
+
+      const refreshed = await onRefresh()
+      void (refreshed
+        ? message.success('动作标注已提交。')
+        : message.warning('标注已提交，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
       await onRefresh().catch(() => undefined)
       recordInputVersionConflict(error)
@@ -817,6 +839,40 @@ export function CaptureGroupAnnotationPanel({
       setIsSubmittingRevision(false)
     }
   }
+
+  const submitRevisionRef = useRef(submitRevision)
+  useEffect(() => {
+    submitRevisionRef.current = submitRevision
+  })
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        const isSingleCameraQuickSubmit =
+          activeCameraNumber !== null &&
+          canEditActiveCamera &&
+          visibleDraftSegments.length > 0 &&
+          allCameraNumbers.length === 1
+        if (
+          !isSubmittingRevisionRef.current &&
+          !inputVersionConflict &&
+          (canSubmitGroupRevision || isSingleCameraQuickSubmit)
+        ) {
+          event.preventDefault()
+          void submitRevisionRef.current()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    activeCameraNumber,
+    allCameraNumbers.length,
+    canEditActiveCamera,
+    canSubmitGroupRevision,
+    inputVersionConflict,
+    visibleDraftSegments.length,
+  ])
 
   const beginDraftEdit = useCallback(() => {
     updateActiveCameraDraft((current) => ({ ...current, dirty: true, context: draftContext }))
@@ -1145,6 +1201,7 @@ export function CaptureGroupAnnotationPanel({
                     disabled={visibleDraftSegments.length === 0 || !canEditActiveCamera}
                     loading={isSubmittingRevision}
                     icon={<Check size={13} strokeWidth={2.2} />}
+                    title="提交机位"
                     onClick={() => {
                       if (activeCameraNumber !== null) {
                         void saveCameraView(activeCameraNumber, 'SUBMITTED')
@@ -1167,6 +1224,37 @@ export function CaptureGroupAnnotationPanel({
               onSeekToMs={onSeekToMs}
             />
           </div>
+          {visibleDraftSegments.length === 0 && (
+            <div
+              className="capture-group-empty-segments-hint"
+              style={{
+                padding: '14px 16px',
+                background: 'var(--app-color-surface-hover, #f8fafc)',
+                borderRadius: 'var(--app-radius-md, 6px)',
+                border: '1px dashed var(--app-color-border-subtle, #e2e8f0)',
+                margin: '12px 0',
+                fontSize: '13px',
+                color: 'var(--app-color-foreground-muted, #64748b)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: 'var(--app-color-foreground, #0f172a)',
+                  fontWeight: 500,
+                  marginBottom: '4px',
+                }}
+              >
+                <span aria-hidden="true">⚠️</span>
+                <span>未检测到有效动作候选</span>
+              </div>
+              <p style={{ margin: 0, lineHeight: 1.5 }}>
+                AI 模型未在该视频中识别出临床配药动作段。若此视频为非配药、输液打针或日常杂拍，请点击右上角【废弃并下一条】直接清退。
+              </p>
+            </div>
+          )}
           {visibleDraftSegments.map((segment, index) => {
             const isPlayingActive =
               currentPlaybackTimeMs !== null &&
@@ -1228,9 +1316,21 @@ export function CaptureGroupAnnotationPanel({
                 </Button>
               ) : null}
             </div>
-            {canEditActiveCamera || annotationNote.trim() ? (
+            {annotationNote.trim() || isNoteOpen ? (
               <label className="capture-group-note-field">
-                <span>机位 {activeCameraNumber ?? '—'} 标注备注（可选）</span>
+                <div className="capture-group-note-header">
+                  <span>机位 {activeCameraNumber ?? '—'} 标注备注（可选）</span>
+                  {!annotationNote.trim() && canEditActiveCamera ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      className="capture-group-note-cancel-btn"
+                      onClick={() => setIsNoteOpen(false)}
+                    >
+                      收起
+                    </Button>
+                  ) : null}
+                </div>
                 <Input.TextArea
                   value={annotationNote}
                   placeholder="输入修订说明或异常情况..."
@@ -1243,6 +1343,17 @@ export function CaptureGroupAnnotationPanel({
                   }}
                 />
               </label>
+            ) : canEditActiveCamera ? (
+              <div className="capture-group-note-toggle">
+                <Button
+                  type="text"
+                  size="small"
+                  className="capture-group-note-toggle-btn"
+                  onClick={() => setIsNoteOpen(true)}
+                >
+                  + 添加机位备注
+                </Button>
+              </div>
             ) : null}
           </div>
 
@@ -1377,6 +1488,7 @@ export function CaptureGroupAnnotationPanel({
               htmlType="submit"
               icon={<Check size={14} strokeWidth={2.2} />}
               loading={isSubmittingRevision}
+              title={canQuickApprove ? '提交复核 (快捷通过)' : '提交复核'}
               disabled={
                 inputVersionConflict ||
                 (!canSubmitGroupRevision &&
@@ -1388,7 +1500,7 @@ export function CaptureGroupAnnotationPanel({
                   ))
               }
             >
-              {task?.can_review ? '确认并通过' : '提交复核'}
+              提交复核
             </Button>
           </div>
 
@@ -1443,8 +1555,13 @@ export function CaptureGroupAnnotationPanel({
                 const formattedStart = formatAnnotationTime(segment.start_ms)
                 const formattedEnd = formatAnnotationTime(segment.end_ms)
                 return (
-                  <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}`}>
-                    <span>时间段 {index + 1}</span>
+                  <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}`} className="capture-group-readonly-segment-card">
+                    <div className="capture-group-readonly-header">
+                      <span className="capture-group-readonly-camera">时间段 {index + 1}</span>
+                      <span className="capture-group-readonly-action-badge">
+                        {getActionDisplayName(segment.label, schema)}
+                      </span>
+                    </div>
                     <div className="capture-group-readonly-time">
                       <strong>
                         {formattedStart && formattedEnd
@@ -1455,7 +1572,6 @@ export function CaptureGroupAnnotationPanel({
                         原始值：{segment.start_ms}–{segment.end_ms} 毫秒
                       </small>
                     </div>
-                    <span>{getActionDisplayName(segment.label, schema)}</span>
                   </li>
                 )
               })}

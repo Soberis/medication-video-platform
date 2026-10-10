@@ -427,7 +427,7 @@ describe('CaptureGroup Review and event cleaning', () => {
       task: submitted,
       taskResponses: [submitted, completed],
       quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
+      candidateStatus: 'HAND_DETECTED',
     })
     const download = vi
       .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
@@ -459,7 +459,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     stubGroupDetail(group, {
       task: completed,
       quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
+      candidateStatus: 'HAND_DETECTED',
     })
 
     renderCaptureGroup()
@@ -479,7 +479,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     stubGroupDetail(group, {
       task: completed,
       quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
+      candidateStatus: 'HAND_DETECTED',
     })
     const download = vi
       .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
@@ -497,6 +497,28 @@ describe('CaptureGroup Review and event cleaning', () => {
       expect(download).toHaveBeenCalledWith(projectId, [groupId])
     })
     expect(revoke).toHaveBeenCalledWith('blob:synthetic-download')
+  })
+
+  it('disables the header HDF5 download button when no hand pose was detected', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const completed = approvedGroupTask(group)
+    stubGroupDetail(group, {
+      task: completed,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    renderCaptureGroup()
+
+    const headerDownloadBtn = await screen.findByRole('button', { name: '下载 HDF5' })
+    await waitFor(() => {
+      expect(headerDownloadBtn).toBeDisabled()
+    })
+    expect(await screen.findByText(/人工复核已通过 · 未检出手部/)).toBeInTheDocument()
   })
 })
 

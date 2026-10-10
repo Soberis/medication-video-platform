@@ -123,7 +123,7 @@ describe('capture group list view', () => {
     )
     expect(screen.getByText('共 2 条采集记录')).toBeInTheDocument()
     const toolbar = screen
-      .getByRole('combobox', { name: '视频视图' })
+      .getByRole('radiogroup', { name: '视频视图' })
       .closest('.capture-group-list-toolbar')
     if (!toolbar) throw new Error('Capture group list toolbar was not mounted.')
     const toolbarFilters = toolbar.querySelector<HTMLElement>('.capture-group-list-toolbar-filters')
@@ -615,11 +615,9 @@ describe('capture group list view', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText(/AI 就绪 · 3段动作/)).toBeInTheDocument()
-    expect(await screen.findByText('未检出手部')).toBeInTheDocument()
+    expect((await screen.findAllByText('未检出手部')).length).toBeGreaterThan(0)
 
-    // View select dropdown allows filtering by ready view
-    const viewSelect = await screen.findByRole('combobox', { name: '视频视图' })
-    await user.click(viewSelect)
+    // View segmented tabs allow filtering by ready view
     await user.click(await screen.findByText(/AI 已就绪/))
 
     // Ready view filters correctly
@@ -627,8 +625,8 @@ describe('capture group list view', () => {
     expect(screen.queryByRole('listitem', { name: /invalid-video/ })).not.toBeInTheDocument()
 
     // Switch to invalid/attention view
-    await user.click(viewSelect)
-    await user.click(await screen.findByText(/未检出手部 \/ 需关注/))
+    const segmented = screen.getByRole('radiogroup', { name: '视频视图' })
+    await user.click(within(segmented).getByText('未检出手部'))
 
     // The invalid group is visible, ready group is hidden
     expect(screen.getByRole('listitem', { name: /invalid-video/ })).toBeInTheDocument()

@@ -8,7 +8,7 @@ import {
   UsersRound,
   Video,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
@@ -68,19 +68,55 @@ export default function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const { projectId = '' } = useParams()
+  const isVideoWorkbench =
+    matchPath(
+      { path: '/projects/:projectId/capture-groups/:captureGroupId', end: true },
+      location.pathname,
+    ) !== null
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
+      const isDirectWorkbench =
+        matchPath(
+          { path: '/projects/:projectId/capture-groups/:captureGroupId', end: true },
+          window.location.pathname,
+        ) !== null
+      if (isDirectWorkbench) return true
       return localStorage.getItem('mvp:sidebar_collapsed') === 'true'
     } catch {
       return false
     }
   })
+
+  const wasInWorkbenchRef = useRef(isVideoWorkbench)
+  const userCollapsedBeforeWorkbenchRef = useRef<boolean | null>(
+    isVideoWorkbench ? false : null,
+  )
+
+  useEffect(() => {
+    if (isVideoWorkbench) {
+      if (!wasInWorkbenchRef.current) {
+        userCollapsedBeforeWorkbenchRef.current = sidebarCollapsed
+        setSidebarCollapsed(true)
+        wasInWorkbenchRef.current = true
+      }
+    } else if (wasInWorkbenchRef.current) {
+      wasInWorkbenchRef.current = false
+      if (userCollapsedBeforeWorkbenchRef.current !== null) {
+        setSidebarCollapsed(userCollapsedBeforeWorkbenchRef.current)
+        userCollapsedBeforeWorkbenchRef.current = null
+      }
+    }
+  }, [isVideoWorkbench, sidebarCollapsed])
+
   const handleSidebarCollapsedChange = (collapsed: boolean) => {
     setSidebarCollapsed(collapsed)
-    try {
-      localStorage.setItem('mvp:sidebar_collapsed', String(collapsed))
-    } catch {
-      // ignore
+    if (!isVideoWorkbench) {
+      try {
+        localStorage.setItem('mvp:sidebar_collapsed', String(collapsed))
+      } catch {
+        // ignore
+      }
     }
   }
   const isAdministrator = auth.session?.role === 'ADMIN'

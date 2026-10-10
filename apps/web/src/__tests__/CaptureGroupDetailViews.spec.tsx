@@ -502,9 +502,8 @@ describe('CaptureGroup detail views', () => {
       [`/projects/${projectId}/capture-groups/${groupId}`],
     )
 
-    // Verify formatted title tag
-    expect(await screen.findByText('小红书')).toBeInTheDocument()
-    expect(screen.getByText('1110058963 (c7e6…3f85)')).toBeInTheDocument()
+    // Verify clean title heading
+    expect(await screen.findByRole('heading', { level: 1, name: '1110058963 (c7e6…3f85)' })).toBeInTheDocument()
 
     // Stepper navigation buttons
     const stepper = await screen.findByRole('group', { name: '视频序列导航' })

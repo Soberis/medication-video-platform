@@ -8,7 +8,6 @@ import {
   reviewAnnotationRevision,
   type AnnotationLabelSchema,
   type AnnotationReview,
-  type AnnotationSegment,
   type AnnotationTask,
   type CaptureGroupCleaning,
   type CaptureGroupEvidence,
@@ -42,6 +41,7 @@ export interface CaptureGroupReviewPanelProps {
   onPlaySegment?: (startMs: number, endMs: number) => void
   activeCameraNumber?: number | null
   onSelectCamera?: (cameraNumber: number) => void
+  hasHandPose?: boolean
 }
 
 export function CaptureGroupReviewPanel({
@@ -53,6 +53,7 @@ export function CaptureGroupReviewPanel({
   onPlaySegment,
   activeCameraNumber,
   onSelectCamera,
+  hasHandPose = true,
 }: CaptureGroupReviewPanelProps) {
   const { message, modal } = AntdApp.useApp()
   const [reviewingDecision, setReviewingDecision] = useState<
@@ -183,6 +184,13 @@ export function CaptureGroupReviewPanel({
     const approved = decision === 'APPROVED'
     const downloadAfter = Boolean(approved && options?.downloadAfter)
 
+    const effectiveReturnCameras =
+      returnCameraNumbers.length > 0
+        ? returnCameraNumbers
+        : cameraNumbers.length === 1
+          ? cameraNumbers
+          : []
+
     setReviewingDecision(downloadAfter ? 'APPROVED_DOWNLOAD' : decision)
     try {
       await reviewAnnotationRevision(
@@ -193,9 +201,9 @@ export function CaptureGroupReviewPanel({
         {
           reviewedCameraNumbers:
             decision === 'REJECTED'
-              ? cameraNumbers.filter((number) => !returnCameraNumbers.includes(number))
+              ? cameraNumbers.filter((number) => !effectiveReturnCameras.includes(number))
               : cameraNumbers,
-          returnCameraNumbers: decision === 'REJECTED' ? returnCameraNumbers : [],
+          returnCameraNumbers: decision === 'REJECTED' ? effectiveReturnCameras : [],
         },
       )
       const refreshed = await onRefresh()
@@ -239,7 +247,13 @@ export function CaptureGroupReviewPanel({
       return
     }
     if (decision === 'REJECTED') {
-      if (returnCameraNumbers.length === 0) {
+      const effectiveReturnCameras =
+        returnCameraNumbers.length > 0
+          ? returnCameraNumbers
+          : cameraNumbers.length === 1
+            ? cameraNumbers
+            : []
+      if (effectiveReturnCameras.length === 0) {
         void message.warning('请至少选择一个需要退回的机位。')
         return
       }
@@ -308,10 +322,7 @@ export function CaptureGroupReviewPanel({
                     : ''}
                 </span>
                 <small>
-                  {stringValue(evidence, 'algorithm_version') ?? '算法版本未提供'}
-                  {stringValue(evidence, 'model_sha256')
-                    ? ` · model ${shortEvidenceId(stringValue(evidence, 'model_sha256')!)}`
-                    : ''}
+                  {stringValue(evidence, 'algorithm_key') ?? '手部检测算法'}
                 </small>
               </li>
             ))}
@@ -359,30 +370,38 @@ export function CaptureGroupReviewPanel({
       className="capture-group-review-section capture-group-workflow-focus-target"
       id="capture-group-review"
       tabIndex={-1}
-      title="标注复核"
+      title="动作标注"
       titleId="capture-group-review-title"
     >
       {isReviewApproved ? (
         <div className="capture-group-review-approved-banner">
           <div className="banner-status">
-            <StatusIndicator tone="success">人工复核已通过</StatusIndicator>
+            <StatusIndicator tone={hasHandPose === false ? 'warning' : 'success'}>
+              {hasHandPose === false ? '已完成 · 未检出手部' : '已完成'}
+              <span className="sr-only">
+                {hasHandPose === false ? '人工复核已通过 · 未检出手部' : '人工复核已通过'}
+              </span>
+            </StatusIndicator>
             <span className="banner-summary" role="status">
-              {group.expected_camera_count > 1 && cameraSummaryDetail
-                ? cameraSummaryDetail
-                : `共 ${totalApprovedSegments} 段已确认动作`}
+              {hasHandPose === false
+                ? `共 ${totalApprovedSegments} 段已确认动作（无有效手部骨骼，无法导出 HDF5）`
+                : group.expected_camera_count > 1 && cameraSummaryDetail
+                  ? cameraSummaryDetail
+                  : `共 ${totalApprovedSegments} 段已确认动作`}
             </span>
           </div>
           <div className="capture-group-approved-actions">
             <Popconfirm
               title="重新编辑此视频标注？"
-              description="重新编辑将把当前通过状态打回为可编辑草稿，保留已确认的动作片段供您微调。修改完毕后可再次手动提交并通过复核。"
+              description="重新编辑将把当前通过状态打回为可编辑草稿，保留已确认的动作片段供您微调。修改完毕后可再次确认标注。"
               okText="确认重新编辑"
               cancelText="取消"
               onConfirm={() => void handleReopenForRework()}
             >
               <Button
                 size="small"
-                type="text"
+                type="primary"
+                ghost
                 icon={<RotateCcw size={13} strokeWidth={2} />}
                 loading={isReopening}
               >
@@ -398,11 +417,34 @@ export function CaptureGroupReviewPanel({
             <div className="capture-group-review-summary-info">
               <StatusIndicator tone={allCamerasSubmittedOrExcluded ? 'success' : 'warning'}>
                 {allCamerasSubmittedOrExcluded
-                  ? `全组 ${cameraNumbers.length} 个机位标注已完备`
+                  ? cameraNumbers.length > 1
+                    ? `全组 ${cameraNumbers.length} 个机位标注已完备`
+                    : `标注已就绪（共 ${totalApprovedSegments} 段动作）`
                   : `机位待就绪（剩余 ${unsubmittedCameraNumbers.length} 个机位待处理）`}
               </StatusIndicator>
             </div>
-            <div className="capture-group-review-actions" aria-label="人工标签复核操作">
+            <div className="capture-group-review-secondary-actions">
+              <Popconfirm
+                title="重新编辑此视频标注？"
+                description="重新编辑将把当前状态打回为可编辑草稿，保留已确认的动作片段供您微调。修改完毕后可再次确认标注。"
+                okText="确认重新编辑"
+                cancelText="取消"
+                onConfirm={() => void handleReopenForRework()}
+              >
+                <Button
+                  size="small"
+                  type="primary"
+                  ghost
+                  icon={<RotateCcw size={13} strokeWidth={2} />}
+                  loading={isReopening}
+                >
+                  重新编辑
+                </Button>
+              </Popconfirm>
+            </div>
+          </div>
+          <div className="capture-group-review-actions" aria-label="人工标签复核操作">
+            {hasHandPose !== false ? (
               <Tooltip
                 title={
                   !allCamerasSubmittedOrExcluded
@@ -422,27 +464,28 @@ export function CaptureGroupReviewPanel({
                   </Button>
                 </span>
               </Tooltip>
-              <Button
-                icon={<Check size={14} strokeWidth={2.2} />}
-                loading={reviewingDecision === 'APPROVED'}
-                disabled={reviewingDecision !== null || !canFinalizeReview}
-                onClick={() => openReview('APPROVED')}
-              >
-                通过复核
-              </Button>
-              <Button
-                danger
-                loading={reviewingDecision === 'REJECTED'}
-                disabled={
-                  reviewingDecision !== null ||
-                  !canFinalizeReview ||
-                  returnCameraNumbers.length === 0
-                }
-                onClick={() => openReview('REJECTED')}
-              >
-                退回修改
-              </Button>
-            </div>
+            ) : null}
+            <Button
+              type={hasHandPose === false ? 'primary' : 'default'}
+              icon={<Check size={14} strokeWidth={2.2} />}
+              loading={reviewingDecision === 'APPROVED'}
+              disabled={reviewingDecision !== null || !canFinalizeReview}
+              onClick={() => openReview('APPROVED')}
+            >
+              通过复核
+            </Button>
+            <Button
+              danger
+              loading={reviewingDecision === 'REJECTED'}
+              disabled={
+                reviewingDecision !== null ||
+                !canFinalizeReview ||
+                (cameraNumbers.length > 1 && returnCameraNumbers.length === 0)
+              }
+              onClick={() => openReview('REJECTED')}
+            >
+              退回修改
+            </Button>
           </div>
           {!canFinalizeReview && !allCamerasSubmittedOrExcluded && (
             <div className="capture-group-review-disabled-hint" role="status">
@@ -469,37 +512,40 @@ export function CaptureGroupReviewPanel({
                   : state === 'EXCLUDED'
                     ? '已排除'
                     : '待处理'
+            const showLaneHeading = cameraNumbers.length > 1
             return (
               <article className="capture-group-review-camera-lane" key={cameraNumber}>
-                <div className="capture-group-review-camera-lane-heading">
-                  <div className="capture-group-review-lane-identity">
-                    <h4>机位 {cameraNumber}</h4>
-                    <span className="capture-group-review-segment-count">
-                      {segmentCount ? `${segmentCount} 段` : '无动作段'}
-                    </span>
-                    <StatusIndicator
-                      tone={
-                        state === 'SUBMITTED'
-                          ? 'success'
-                          : state === 'EXCLUDED'
-                            ? 'warning'
-                            : 'neutral'
-                      }
-                    >
-                      {laneStatus}
-                    </StatusIndicator>
-                  </div>
-                  <div className="capture-group-review-camera-lane-controls">
-                    {canReturnLane && canReview && !review ? (
-                      <Checkbox
-                        checked={returnCameraNumbers.includes(cameraNumber)}
-                        onChange={(event) => updateReturnCamera(cameraNumber, event.target.checked)}
+                {showLaneHeading ? (
+                  <div className="capture-group-review-camera-lane-heading">
+                    <div className="capture-group-review-lane-identity">
+                      <h4>机位 {cameraNumber}</h4>
+                      <span className="capture-group-review-segment-count">
+                        {segmentCount ? `${segmentCount} 段` : '无动作段'}
+                      </span>
+                      <StatusIndicator
+                        tone={
+                          state === 'SUBMITTED'
+                            ? 'success'
+                            : state === 'EXCLUDED'
+                              ? 'warning'
+                              : 'neutral'
+                        }
                       >
-                        退回此机位
-                      </Checkbox>
-                    ) : null}
+                        {laneStatus}
+                      </StatusIndicator>
+                    </div>
+                    <div className="capture-group-review-camera-lane-controls">
+                      {canReturnLane && canReview && !review ? (
+                        <Checkbox
+                          checked={returnCameraNumbers.includes(cameraNumber)}
+                          onChange={(event) => updateReturnCamera(cameraNumber, event.target.checked)}
+                        >
+                          退回此机位
+                        </Checkbox>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
+                ) : null}
                 <div className="capture-group-review-camera-segments-block">
                   {segmentCount ? (
                     <>
@@ -575,14 +621,6 @@ export function CaptureGroupReviewPanel({
             )
           })}
         </section>
-      ) : null}
-      {revision?.annotation_document.schema_version === 'annotation-document.v1' ? (
-        <FormalAnnotationIntervals
-          activeCameraNumber={activeCameraNumber}
-          schema={schema}
-          segments={revision.annotation_document.segments}
-          onPlaySegment={onPlaySegment}
-        />
       ) : null}
       {!task ? (
         <p className="form-hint">当前没有可见的人工标签任务，暂不能读取修订、复核事实。</p>
@@ -683,106 +721,19 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
           ariaLabel="已确认机位集合摘要"
           items={[
             {
-              id: 'view-set-schema',
-              label: '标注结构版本',
-              value: viewSet.schema_version,
-            },
-            {
-              id: 'view-set-group-version',
-              label: '采集记录版本',
-              value: viewSet.capture_group_version,
-            },
-            {
-              id: 'view-set-camera-set',
-              label: '相机集合快照',
-              value: shortEvidenceId(viewSet.camera_set_snapshot_id),
-            },
-            {
               id: 'view-set-receipt',
               label: '接收状态',
               value: receiptStateLabels[viewSet.receipt_state],
+            },
+            {
+              id: 'view-set-camera-count',
+              label: '确认机位数',
+              value: `${viewSet.views.length} 个机位`,
             },
           ]}
         />
       ) : (
         <p className="form-hint">未提供已确认机位集合。</p>
-      )}
-    </div>
-  )
-}
-
-const INITIAL_SEGMENT_VISIBLE_COUNT = 6
-const INITIAL_INTERVAL_VISIBLE_COUNT = 4
-
-function FormalAnnotationIntervals({
-  activeCameraNumber,
-  schema,
-  segments,
-  onPlaySegment,
-}: {
-  activeCameraNumber?: number | null
-  schema: AnnotationLabelSchema | null
-  segments: AnnotationSegment[] | undefined
-  onPlaySegment?: (startMs: number, endMs: number) => void
-}) {
-  const safeSegments = Array.isArray(segments) ? segments : []
-  const [isExpanded, setIsExpanded] = useState(false)
-  const hasMore = safeSegments.length > INITIAL_SEGMENT_VISIBLE_COUNT
-  const displayedSegments = isExpanded
-    ? safeSegments
-    : safeSegments.slice(0, INITIAL_SEGMENT_VISIBLE_COUNT)
-
-  return (
-    <div className="capture-group-formal-intervals">
-      <div className="capture-group-review-subheading">
-        <div>
-          <span className="app-eyebrow">正式标注动作</span>
-          <h3>正式动作区间（已生效）</h3>
-        </div>
-        <div className="capture-group-intervals-actions">
-          <span>
-            {activeCameraNumber ? `当前机位 ${activeCameraNumber} 本地时间 · ` : '历史单路时间 · '}
-            共 {safeSegments.length} 个动作段
-          </span>
-          {hasMore ? (
-            <Button type="text" size="small" onClick={() => setIsExpanded((prev) => !prev)}>
-              {isExpanded ? '收起' : `展开全部 (${safeSegments.length})`}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {safeSegments.length ? (
-        <ol className="capture-group-formal-interval-list" aria-label="正式动作区间列表">
-          {displayedSegments.map((segment, index) => {
-            const labelName = getActionDisplayName(segment.label, schema)
-            const formattedStart = formatAnnotationTime(segment.start_ms)
-            const formattedEnd = formatAnnotationTime(segment.end_ms)
-            return (
-              <li key={`${segment.label}-${segment.start_ms}-${segment.end_ms}-${index}`}>
-                <span className="capture-group-time-pill">
-                  {formattedStart && formattedEnd
-                    ? `${formattedStart} → ${formattedEnd}`
-                    : '时间暂不可用'}
-                </span>
-                <span className="capture-group-action-name">{labelName ?? segment.label}</span>
-                {onPlaySegment ? (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<Play aria-hidden="true" size={12} />}
-                    onClick={() => onPlaySegment(segment.start_ms, segment.end_ms)}
-                    style={{ marginLeft: 'auto', flex: 'none' }}
-                    title="在当前机位播放此动作片段"
-                  >
-                    播放
-                  </Button>
-                ) : null}
-              </li>
-            )
-          })}
-        </ol>
-      ) : (
-        <p className="form-hint">当前修订未包含正式标注动作区间。</p>
       )}
     </div>
   )
@@ -989,6 +940,8 @@ function CleaningChecksList({ items }: { items: string[] | null | undefined }) {
     </div>
   )
 }
+
+const INITIAL_INTERVAL_VISIBLE_COUNT = 4
 
 function CleaningAnnotationIntervals({
   historicalIntervals,

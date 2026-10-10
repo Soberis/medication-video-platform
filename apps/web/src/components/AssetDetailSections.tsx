@@ -1,5 +1,5 @@
 import { Alert, Button, Descriptions } from 'antd'
-import { Play, Video } from 'lucide-react'
+import { Play } from 'lucide-react'
 import {
   useEffect,
   useMemo,
@@ -177,26 +177,30 @@ export function PlaybackCard({
         <div
           className={`playback-idle-stage playback-availability-${availability.type}`}
           role="status"
+          onClick={canPlay && !isRequestingPlayback ? onStartPlayback : undefined}
         >
-          <div className="playback-idle-icon" aria-hidden="true">
-            <Video size={28} strokeWidth={1.75} />
-          </div>
-          <div className="playback-idle-copy">
-            <strong>{availability.title}</strong>
-            <span>{availability.description}</span>
-          </div>
           {canPlay ? (
-            <Button
-              className="playback-start-action"
-              size="middle"
-              type="primary"
-              icon={<Play size={14} fill="currentColor" />}
-              loading={isRequestingPlayback}
-              onClick={onStartPlayback}
+            <button
+              type="button"
+              className="playback-minimal-play-btn"
+              aria-label="播放视频"
+              disabled={isRequestingPlayback}
+              onClick={(e) => {
+                e.stopPropagation()
+                onStartPlayback()
+              }}
             >
-              播放视频
-            </Button>
-          ) : null}
+              <span className="playback-play-circle">
+                <Play size={24} fill="currentColor" className="playback-play-triangle" />
+              </span>
+              <span className="playback-play-caption">播放视频</span>
+            </button>
+          ) : (
+            <div className="playback-idle-notice">
+              <strong>{availability.title}</strong>
+              <span>{availability.description}</span>
+            </div>
+          )}
         </div>
       ) : null}
       {grant ? (

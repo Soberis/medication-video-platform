@@ -426,7 +426,7 @@ describe('CaptureGroup annotation workflow', () => {
     })
 
     expect(screen.queryByRole('button', { name: '重新确认整体质量' })).not.toBeInTheDocument()
-    expect(await screen.findByText('标注复核')).toBeInTheDocument()
+    expect(await screen.findByText('动作标注')).toBeInTheDocument()
     await user.click(await screen.findByText('更多信息'))
     const auditDetails = screen.getByText('人工标签修订、复核与适用性检查').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
@@ -758,11 +758,77 @@ describe('CaptureGroup annotation workflow', () => {
     fireEvent.keyDown(document.body, { code: 'Space', key: ' ' })
     expect(pause).toHaveBeenCalledTimes(1)
 
+    // Key K: play / pause
+    fireEvent.keyDown(document.body, { code: 'KeyK', key: 'k' })
+    expect(play).toHaveBeenCalledTimes(2)
+    fireEvent.keyDown(document.body, { code: 'KeyK', key: 'k' })
+    expect(pause).toHaveBeenCalledTimes(2)
+
+    // Arrow keys & J/L seeking
+    let currentTime = 10
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => currentTime,
+      set: (val: number) => {
+        currentTime = val
+      },
+    })
+    Object.defineProperty(video, 'duration', { configurable: true, value: 100 })
+
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft' })
+    expect(currentTime).toBe(9)
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' })
+    expect(currentTime).toBe(10)
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft', shiftKey: true })
+    expect(currentTime).toBe(5)
+    fireEvent.keyDown(document.body, { key: 'ArrowRight', shiftKey: true })
+    expect(currentTime).toBe(10)
+
+    // Comma & Period frame stepping
+    fireEvent.keyDown(document.body, { code: 'Comma', key: ',' })
+    expect(currentTime).toBeCloseTo(9.96)
+    fireEvent.keyDown(document.body, { code: 'Period', key: '.' })
+    expect(currentTime).toBeCloseTo(10)
+
+    // Digit jump
+    fireEvent.keyDown(document.body, { key: '5' })
+    expect(currentTime).toBe(50)
+
+    // Volume & Mute
+    let volume = 0.5
+    let muted = false
+    Object.defineProperty(video, 'volume', {
+      configurable: true,
+      get: () => volume,
+      set: (val: number) => {
+        volume = val
+      },
+    })
+    Object.defineProperty(video, 'muted', {
+      configurable: true,
+      get: () => muted,
+      set: (val: boolean) => {
+        muted = val
+      },
+    })
+    fireEvent.keyDown(document.body, { code: 'KeyM', key: 'm' })
+    expect(muted).toBe(true)
+    fireEvent.keyDown(document.body, { key: 'ArrowUp' })
+    expect(muted).toBe(false)
+    expect(volume).toBeCloseTo(0.6)
+    fireEvent.keyDown(document.body, { key: 'ArrowDown' })
+    expect(volume).toBeCloseTo(0.5)
+
+    // Typing protection: input should never trigger shortcuts
     const startInput = screen.getByLabelText('开始时间（毫秒）')
     startInput.focus()
     fireEvent.keyDown(startInput, { code: 'Space', key: ' ' })
-    expect(play).toHaveBeenCalledTimes(1)
-    expect(pause).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(startInput, { code: 'KeyK', key: 'k' })
+    fireEvent.keyDown(startInput, { key: 'ArrowLeft' })
+    fireEvent.keyDown(startInput, { key: '5' })
+    expect(play).toHaveBeenCalledTimes(2)
+    expect(pause).toHaveBeenCalledTimes(2)
+    expect(currentTime).toBe(50)
   })
 
   it('automatically loads AI candidates into the timeline and keeps the workflow compact', async () => {
