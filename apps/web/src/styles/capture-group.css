@@ -93,7 +93,7 @@
 .capture-group-workspace {
   display: grid;
   grid-template-areas: 'video action';
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  grid-template-columns: minmax(0, 1fr) minmax(350px, 400px);
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -104,7 +104,7 @@
 
 @media (min-width: 1200px) {
   .capture-group-workspace {
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) 400px;
   }
 }
 
@@ -513,10 +513,14 @@
   display: grid;
   gap: var(--app-space-8);
   min-width: 0;
-  padding: var(--app-space-12);
-  background: var(--app-color-surface);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-md);
+  padding: var(--app-space-8) 0;
+  background: transparent;
+  border: none;
+}
+
+.capture-group-review-camera-lane + .capture-group-review-camera-lane {
+  border-top: 1px solid var(--app-color-border-subtle);
+  padding-top: var(--app-space-12);
 }
 
 .capture-group-review-camera-lane-controls {
@@ -530,43 +534,87 @@
 
 .capture-group-review-camera-segments-block {
   min-width: 0;
-  border-top: 1px solid var(--app-color-border-subtle);
+  border-top: none;
   padding-top: var(--app-space-4);
 }
 
 .capture-group-review-camera-segments {
   display: grid;
-  gap: 0;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 240px;
+  max-height: 480px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .capture-group-review-camera-segments li {
   display: grid;
-  grid-template-columns: minmax(94px, max-content) minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--app-space-8);
   min-width: 0;
-  padding: var(--app-space-6) var(--app-space-4);
+  padding: var(--app-space-6) var(--app-space-8);
+  border-radius: var(--app-radius-sm);
   transition: background-color var(--app-transition-quick);
+  cursor: pointer;
+  user-select: none;
+}
+
+.capture-group-review-camera-segments li:focus-visible {
+  outline: 2px solid var(--app-color-focus-ring);
+  outline-offset: -1px;
 }
 
 .capture-group-review-camera-segments li + li {
-  border-top: 1px solid var(--app-color-border-subtle);
+  border-top: 1px solid var(--app-color-border-subtle, #f1f5f9);
 }
 
 .capture-group-review-camera-segments li:hover {
-  background-color: var(--app-color-surface-hover);
+  background-color: var(--app-color-surface-hover, #f8fafc);
+}
+
+.capture-group-review-camera-segments .capture-group-time-pill {
+  flex: none;
+  padding: 2px 6px;
+  background: var(--app-color-surface-hover, #f1f5f9);
+  color: var(--app-color-primary, #1e40af);
+  font-family: var(--app-font-family-mono, monospace);
+  font-size: 11px;
+  font-weight: var(--app-font-weight-medium, 500);
+  border: 1px solid var(--app-color-border-subtle, #e2e8f0);
+  border-radius: var(--app-radius-xs, 3px);
+  white-space: nowrap;
+}
+
+.capture-group-segment-label {
+  font-size: var(--app-font-size-helper, 13px);
+  font-weight: var(--app-font-weight-medium, 500);
+  color: var(--app-color-foreground, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capture-group-review-camera-segments li .ant-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--app-color-foreground-muted);
+  font-size: 12px;
+  padding: 2px 8px;
+  height: 24px;
+}
+
+.capture-group-review-camera-segments li:hover .ant-btn {
+  color: var(--app-color-primary);
 }
 
 .capture-group-review-expand-segments {
-  padding-inline: 0;
-  margin-top: var(--app-space-4);
+  padding-inline: var(--app-space-8);
+  margin-top: var(--app-space-6);
   color: var(--app-color-primary);
+  font-size: 12px;
 }
 
 .capture-group-review-correspondences ul {
@@ -1787,35 +1835,44 @@
 
 .capture-group-review-approved-banner {
   display: flex;
-  flex-direction: column;
-  gap: var(--app-space-10);
-  padding: var(--app-space-14) var(--app-space-16);
-  background: var(--app-color-success-surface);
-  border: 1px solid color-mix(in srgb, var(--app-color-success) 22%, transparent);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--app-space-8) var(--app-space-12);
+  padding: var(--app-space-8) var(--app-space-12);
+  background: var(--app-color-surface);
+  border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-md);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .capture-group-review-approved-banner .banner-status {
   display: flex;
-  flex-direction: column;
-  gap: var(--app-space-4);
+  align-items: center;
+  gap: var(--app-space-8);
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
-.capture-group-review-approved-banner p {
-  margin: 0;
-  color: var(--app-color-foreground-secondary);
+.capture-group-review-approved-banner .banner-summary {
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .capture-group-approved-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--app-space-8);
-  padding-top: var(--app-space-10);
-  border-top: 1px solid color-mix(in srgb, var(--app-color-success) 14%, transparent);
+  gap: var(--app-space-6);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.capture-group-approved-actions .ant-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .capture-group-review-sticky-header {
@@ -1952,6 +2009,16 @@
 #capture-group-review-details {
   display: grid;
   gap: var(--app-space-12);
+  min-width: 0;
+}
+
+#capture-group-review-details .property-row {
+  min-width: 0;
+}
+
+#capture-group-review-details .property-row-value {
+  min-width: 0;
+  word-break: break-all;
 }
 
 .capture-group-review-facts {
@@ -1962,6 +2029,7 @@
   background: var(--app-color-surface);
   border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-md);
+  min-width: 0;
 }
 
 .capture-group-review-facts .property-row {

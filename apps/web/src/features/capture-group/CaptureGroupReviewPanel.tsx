@@ -58,23 +58,7 @@ export function CaptureGroupReviewPanel({
   const [reviewingDecision, setReviewingDecision] = useState<
     AnnotationReview['decision'] | 'APPROVED_DOWNLOAD' | null
   >(null)
-  const [isDownloadingHdf5, setIsDownloadingHdf5] = useState(false)
   const [isReopening, setIsReopening] = useState(false)
-
-  async function handleDownloadHdf5() {
-    if (isDownloadingHdf5) return
-    setIsDownloadingHdf5(true)
-    try {
-      const fileName = await triggerHdf5Download(projectId, [group.capture_group_id])
-      void message.success(`已开始下载 ${fileName}。`)
-    } catch (error) {
-      void message.error(
-        error instanceof Error ? error.message : 'HDF5 导出失败，请重试。',
-      )
-    } finally {
-      setIsDownloadingHdf5(false)
-    }
-  }
 
   async function handleReopenForRework() {
     if (!task || isReopening) return
@@ -150,7 +134,6 @@ export function CaptureGroupReviewPanel({
   })
   const canFinalizeReview = Boolean(canReview && allCamerasSubmittedOrExcluded)
   const isReviewApproved = review?.decision === 'APPROVED'
-  const [isCompletedDetailOpen, setIsCompletedDetailOpen] = useState(false)
   const [expandedReviewCameras, setExpandedReviewCameras] = useState<number[]>([])
 
   const includedCameraNumbers = cameraNumbers.filter(
@@ -187,6 +170,61 @@ export function CaptureGroupReviewPanel({
     })
   }
 
+  async function executeReview(
+    decision: AnnotationReview['decision'],
+    reviewNote = '',
+    options?: { downloadAfter?: boolean },
+  ) {
+    if (!task || !revision || !task.can_review || reviewingDecision) return
+    if (!canFinalizeReview) {
+      void message.warning('请先处理完所有机位：每个机位都必须提交标注或排除。')
+      return
+    }
+    const approved = decision === 'APPROVED'
+    const downloadAfter = Boolean(approved && options?.downloadAfter)
+
+    setReviewingDecision(downloadAfter ? 'APPROVED_DOWNLOAD' : decision)
+    try {
+      await reviewAnnotationRevision(
+        projectId,
+        revision.annotation_revision_id,
+        decision,
+        reviewNote,
+        {
+          reviewedCameraNumbers:
+            decision === 'REJECTED'
+              ? cameraNumbers.filter((number) => !returnCameraNumbers.includes(number))
+              : cameraNumbers,
+          returnCameraNumbers: decision === 'REJECTED' ? returnCameraNumbers : [],
+        },
+      )
+      const refreshed = await onRefresh()
+      void (refreshed
+        ? message.success(approved ? '人工标签复核已通过。' : '已退回人工标签修订。')
+        : message.warning(
+            approved
+              ? '复核已通过，但最新事实暂未刷新；请手动刷新确认。'
+              : '修订已退回，但最新事实暂未刷新；请手动刷新确认。',
+          ))
+      if (downloadAfter) {
+        try {
+          const fileName = await triggerHdf5Download(projectId, [group.capture_group_id])
+          void message.success(`已开始下载 ${fileName}。`)
+        } catch (dlErr) {
+          void message.error(
+            dlErr instanceof Error ? dlErr.message : 'HDF5 导出失败，请重试。',
+          )
+        }
+      }
+    } catch (error) {
+      void message.error(
+        error instanceof Error ? error.message : '复核暂未提交，请刷新后重试。',
+      )
+    } finally {
+      setReviewingDecision(null)
+    }
+  }
+
   function openReview(
     decision: AnnotationReview['decision'],
     options?: { downloadAfter?: boolean },
@@ -196,83 +234,40 @@ export function CaptureGroupReviewPanel({
       void message.warning('请先处理完所有机位：每个机位都必须提交标注或排除。')
       return
     }
-    if (decision === 'REJECTED' && returnCameraNumbers.length === 0) {
-      void message.warning('请至少选择一个需要退回的机位。')
+    if (decision === 'APPROVED') {
+      void executeReview('APPROVED', '', options)
       return
     }
-    let reviewNote = ''
-    const approved = decision === 'APPROVED'
-    const downloadAfter = Boolean(approved && options?.downloadAfter)
-    modal.confirm({
-      title: downloadAfter
-        ? '通过复核并下载 HDF5'
-        : approved
-          ? '通过人工标签复核'
-          : '退回人工标签修订',
-      content: downloadAfter ? (
-        <p>确认本次多机位动作标注正确并予以通过？通过后将生成正式版本，并立即开始下载该组的 HDF5 数据集。</p>
-      ) : approved ? (
-        <p>确认本次多机位动作标注正确并予以通过？通过后将生成正式版本用于后续质检与导出。</p>
-      ) : (
-        <div className="capture-group-review-confirmation">
-          <p>退回这次人工标签修订，选中的机位将重新开放编辑，其余机位结果保留。</p>
-          <Input.TextArea
-            aria-label="退回修改说明（可选）"
-            maxLength={1000}
-            rows={3}
-            placeholder="补充需要修改的内容（可选）"
-            onChange={(event) => {
-              reviewNote = event.target.value
-            }}
-          />
-        </div>
-      ),
-      okText: downloadAfter ? '通过并下载' : approved ? '通过复核' : '退回修改',
-      cancelText: '取消',
-      okButtonProps: { danger: !approved },
-      async onOk() {
-        setReviewingDecision(downloadAfter ? 'APPROVED_DOWNLOAD' : decision)
-        try {
-          await reviewAnnotationRevision(
-            projectId,
-            revision.annotation_revision_id,
-            decision,
-            reviewNote,
-            {
-              reviewedCameraNumbers:
-                decision === 'REJECTED'
-                  ? cameraNumbers.filter((number) => !returnCameraNumbers.includes(number))
-                  : cameraNumbers,
-              returnCameraNumbers: decision === 'REJECTED' ? returnCameraNumbers : [],
-            },
-          )
-          const refreshed = await onRefresh()
-          void (refreshed
-            ? message.success(approved ? '人工标签复核已通过。' : '已退回人工标签修订。')
-            : message.warning(
-                approved
-                  ? '复核已通过，但最新事实暂未刷新；请手动刷新确认。'
-                  : '修订已退回，但最新事实暂未刷新；请手动刷新确认。',
-              ))
-          if (downloadAfter) {
-            try {
-              const fileName = await triggerHdf5Download(projectId, [group.capture_group_id])
-              void message.success(`已开始下载 ${fileName}。`)
-            } catch (dlErr) {
-              void message.error(
-                dlErr instanceof Error ? dlErr.message : 'HDF5 导出失败，请重试。',
-              )
-            }
-          }
-        } catch (error) {
-          void message.error(
-            error instanceof Error ? error.message : '复核暂未提交，请刷新后重试。',
-          )
-        } finally {
-          setReviewingDecision(null)
-        }
-      },
-    })
+    if (decision === 'REJECTED') {
+      if (returnCameraNumbers.length === 0) {
+        void message.warning('请至少选择一个需要退回的机位。')
+        return
+      }
+      let reviewNote = ''
+      modal.confirm({
+        title: '退回人工标签修订',
+        content: (
+          <div className="capture-group-review-confirmation">
+            <p>退回这次人工标签修订，选中的机位将重新开放编辑，其余机位结果保留。</p>
+            <Input.TextArea
+              aria-label="退回修改说明（可选）"
+              maxLength={1000}
+              rows={3}
+              placeholder="补充需要修改的内容（可选）"
+              onChange={(event) => {
+                reviewNote = event.target.value
+              }}
+            />
+          </div>
+        ),
+        okText: '退回修改',
+        cancelText: '取消',
+        okButtonProps: { danger: true },
+        async onOk() {
+          await executeReview('REJECTED', reviewNote)
+        },
+      })
+    }
   }
 
   const evidenceAndHistory = revision ? (
@@ -371,23 +366,13 @@ export function CaptureGroupReviewPanel({
         <div className="capture-group-review-approved-banner">
           <div className="banner-status">
             <StatusIndicator tone="success">人工复核已通过</StatusIndicator>
-            <p role="status">
-              {group.expected_camera_count > 1
-                ? `合组 ${group.received_camera_count} 个已接收机位的独立标注均已完成复核${cameraSummaryDetail ? `：${cameraSummaryDetail}` : ''}。可直接下载当前组 HDF5 数据集。`
-                : '标注已完成人工复核确认，可直接下载当前组 HDF5 数据集。'}
-            </p>
+            <span className="banner-summary" role="status">
+              {group.expected_camera_count > 1 && cameraSummaryDetail
+                ? cameraSummaryDetail
+                : `共 ${totalApprovedSegments} 段已确认动作`}
+            </span>
           </div>
           <div className="capture-group-approved-actions">
-            <Button
-              type="primary"
-              size="small"
-              icon={<Download size={14} strokeWidth={2} />}
-              loading={isDownloadingHdf5}
-              aria-label="下载当前组 HDF5"
-              onClick={() => void handleDownloadHdf5()}
-            >
-              下载 HDF5
-            </Button>
             <Popconfirm
               title="重新编辑此视频标注？"
               description="重新编辑将把当前通过状态打回为可编辑草稿，保留已确认的动作片段供您微调。修改完毕后可再次手动提交并通过复核。"
@@ -397,21 +382,13 @@ export function CaptureGroupReviewPanel({
             >
               <Button
                 size="small"
-                icon={<RotateCcw size={14} strokeWidth={2} />}
+                type="text"
+                icon={<RotateCcw size={13} strokeWidth={2} />}
                 loading={isReopening}
               >
                 重新编辑
               </Button>
             </Popconfirm>
-            <Button
-              type="text"
-              size="small"
-              aria-controls={isCompletedDetailOpen ? 'capture-group-review-details' : undefined}
-              aria-expanded={isCompletedDetailOpen}
-              onClick={() => setIsCompletedDetailOpen((open) => !open)}
-            >
-              {isCompletedDetailOpen ? '收起复核详情' : '查看复核详情'}
-            </Button>
           </div>
         </div>
       ) : null}
@@ -530,22 +507,37 @@ export function CaptureGroupReviewPanel({
                         {cameraView!.segments
                           .slice(0, isSegmentsExpanded ? undefined : 6)
                           .map((segment, index) => (
-                            <li key={segment.segment_id}>
+                            <li
+                              key={segment.segment_id}
+                              className="capture-group-segment-item"
+                              onClick={() => {
+                                if (activeCameraNumber === cameraNumber) {
+                                  onPlaySegment?.(segment.start_ms, segment.end_ms)
+                                } else {
+                                  onSelectCamera?.(cameraNumber)
+                                }
+                              }}
+                            >
                               <span className="capture-group-time-pill">
                                 {formatAnnotationTime(segment.start_ms) ?? '时间暂不可用'} →{' '}
                                 {formatAnnotationTime(segment.end_ms) ?? '时间暂不可用'}
                               </span>
-                              <span>{getActionDisplayName(segment.label, schema)}</span>
+                              <span className="capture-group-segment-label">
+                                {getActionDisplayName(segment.label, schema)}
+                              </span>
                               <Button
                                 type="text"
                                 size="small"
                                 icon={<Play size={12} />}
                                 disabled={!onPlaySegment && !onSelectCamera}
-                                onClick={() =>
-                                  activeCameraNumber === cameraNumber
-                                    ? onPlaySegment?.(segment.start_ms, segment.end_ms)
-                                    : onSelectCamera?.(cameraNumber)
-                                }
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  if (activeCameraNumber === cameraNumber) {
+                                    onPlaySegment?.(segment.start_ms, segment.end_ms)
+                                  } else {
+                                    onSelectCamera?.(cameraNumber)
+                                  }
+                                }}
                               >
                                 {activeCameraNumber === cameraNumber ? '播放' : '切换机位'}
                               </Button>
@@ -596,7 +588,7 @@ export function CaptureGroupReviewPanel({
         <p className="form-hint">当前没有可见的人工标签任务，暂不能读取修订、复核事实。</p>
       ) : !revision ? (
         <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
-      ) : !isReviewApproved || isCompletedDetailOpen ? (
+      ) : (
         <div id="capture-group-review-details">
           {review?.decision === 'REJECTED' ? (
             <Alert
@@ -613,7 +605,7 @@ export function CaptureGroupReviewPanel({
           ) : null}
 
           <details className="capture-group-review-detail-disclosure">
-            <summary>查看复核事实与版本快照</summary>
+            <summary>查看复核详情</summary>
             <div className="capture-group-review-detail-content">
               <div className="capture-group-review-boundary" role="status">
                 <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
@@ -667,7 +659,7 @@ export function CaptureGroupReviewPanel({
 
           {cleaning ? <CaptureGroupCleaningCheck cleaning={cleaning} schema={schema} /> : null}
         </div>
-      ) : null}
+      )}
     </Section>
   )
 }

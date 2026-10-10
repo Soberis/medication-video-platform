@@ -15,6 +15,7 @@ import {
   listAnnotationTasks,
   updateAnnotationCameraView,
   submitAnnotationRevision,
+  reviewAnnotationRevision,
   type AnnotationCorrespondence,
   type AnnotationLabelSchema,
   type GroupAnnotationDocument,
@@ -745,23 +746,68 @@ export function CaptureGroupAnnotationPanel({
 
   async function submitRevision(event?: FormEvent<HTMLFormElement>) {
     if (event) event.preventDefault()
-    if (isSubmittingRevisionRef.current || !canSubmitGroupRevision || isSubmittingRevision) return
+    if (isSubmittingRevisionRef.current || isSubmittingRevision || inputVersionConflict) return
+
+    if (
+      activeCameraNumber !== null &&
+      canEditActiveCamera &&
+      activeCameraView?.state !== 'SUBMITTED' &&
+      activeCameraView?.state !== 'EXCLUDED'
+    ) {
+      const activeDraft = getCameraDraft(activeCameraNumber)
+      if (activeDraft.segments.length > 0) {
+        const saved = await saveCameraView(activeCameraNumber, 'SUBMITTED')
+        if (!saved) return
+      }
+    }
+
+    const targetTask = task
+    if (!targetTask) return
+    const currentCameraViews = targetTask.camera_views ?? cameraViews
+    const unreadyCameraNumbers = allCameraNumbers.filter((num) => {
+      const v = currentCameraViews.find((candidate) => candidate.camera_number === num)
+      return v?.state !== 'SUBMITTED' && v?.state !== 'EXCLUDED'
+    })
+    if (unreadyCameraNumbers.length > 0) {
+      void message.info(
+        `当前机位已保存。还有机位 ${unreadyCameraNumbers.join('、')} 待提交或排除。`,
+      )
+      return
+    }
+
     setSegmentErrors({})
     isSubmittingRevisionRef.current = true
     setIsSubmittingRevision(true)
     try {
-      if (!task) throw new Error('标注任务尚未创建。')
       const finalCorrespondences = buildIndependentCorrespondences()
-      await submitAnnotationRevision(projectId, task.annotation_task_id, {
-        expectedTaskVersion: task.version,
-        inputVersion: task.group_input_version,
+      const revision = await submitAnnotationRevision(projectId, targetTask.annotation_task_id, {
+        expectedTaskVersion: targetTask.version,
+        inputVersion: targetTask.group_input_version,
         correspondences: finalCorrespondences,
         note: '',
       })
-      const refreshed = await onRefresh()
-      void (refreshed
-        ? message.success('整组多机位标注已提交，已进入待复核状态。')
-        : message.warning('修订已提交，但最新事实暂未刷新；请手动刷新确认。'))
+
+      if (targetTask.can_review) {
+        await reviewAnnotationRevision(
+          projectId,
+          revision.annotation_revision_id,
+          'APPROVED',
+          '',
+          {
+            reviewedCameraNumbers: allCameraNumbers,
+            returnCameraNumbers: [],
+          },
+        )
+        const refreshed = await onRefresh()
+        void (refreshed
+          ? message.success('整组标注已确认并通过复核，随时可重新编辑。')
+          : message.warning('复核已通过，但最新事实暂未刷新；请手动刷新确认。'))
+      } else {
+        const refreshed = await onRefresh()
+        void (refreshed
+          ? message.success('整组多机位标注已提交，已进入待复核状态。')
+          : message.warning('修订已提交，但最新事实暂未刷新；请手动刷新确认。'))
+      }
     } catch (error) {
       await onRefresh().catch(() => undefined)
       recordInputVersionConflict(error)
@@ -1331,9 +1377,18 @@ export function CaptureGroupAnnotationPanel({
               htmlType="submit"
               icon={<Check size={14} strokeWidth={2.2} />}
               loading={isSubmittingRevision}
-              disabled={inputVersionConflict || !canSubmitGroupRevision}
+              disabled={
+                inputVersionConflict ||
+                (!canSubmitGroupRevision &&
+                  !(
+                    activeCameraNumber !== null &&
+                    canEditActiveCamera &&
+                    visibleDraftSegments.length > 0 &&
+                    allCameraNumbers.length === 1
+                  ))
+              }
             >
-              提交复核
+              {task?.can_review ? '确认并通过' : '提交复核'}
             </Button>
           </div>
 

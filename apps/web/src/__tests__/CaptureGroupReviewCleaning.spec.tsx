@@ -40,8 +40,6 @@ describe('CaptureGroup Review and event cleaning', () => {
     renderCaptureGroup()
 
     await user.click(await screen.findByRole('button', { name: '通过复核' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
 
     await waitFor(() => {
       expect(
@@ -64,7 +62,7 @@ describe('CaptureGroup Review and event cleaning', () => {
       reviewed_camera_numbers: [1, 2, 3],
       return_camera_numbers: [],
     })
-    await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
+    await user.click(await screen.findByText('查看复核详情'))
     expect(await screen.findByText('标注检查通过')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
@@ -342,8 +340,6 @@ describe('CaptureGroup Review and event cleaning', () => {
     renderCaptureGroup()
 
     await user.click(await screen.findByRole('button', { name: '通过复核' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
 
     expect(await screen.findByText('该采集记录当前不满足标注复核条件。')).toBeInTheDocument()
     expect(
@@ -376,7 +372,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
+    await user.click(await screen.findByText('查看复核详情'))
 
     const rejectedViews = await screen.findByRole('list', { name: '排除 / 缺失机位' })
     expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
@@ -414,7 +410,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
+    await user.click(await screen.findByText('查看复核详情'))
     expect(screen.queryByRole('button', { name: '重新执行标注检查' })).not.toBeInTheDocument()
   })
 
@@ -444,8 +440,6 @@ describe('CaptureGroup Review and event cleaning', () => {
     renderCaptureGroup()
 
     await user.click(await screen.findByRole('button', { name: '通过并下载 HDF5' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '通过并下载' }))
 
     await waitFor(() => {
       expect(download).toHaveBeenCalledWith(projectId, [groupId])
@@ -455,7 +449,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     expect(await screen.findByText('已开始下载 synthetic.hdf5。')).toBeInTheDocument()
   })
 
-  it('allows direct HDF5 download from the approved review banner', async () => {
+  it('does not render duplicate HDF5 download button in the approved review banner', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
@@ -467,22 +461,12 @@ describe('CaptureGroup Review and event cleaning', () => {
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'NO_HAND_DETECTED',
     })
-    const download = vi
-      .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
-      .mockResolvedValueOnce({ blob: new Blob(['synthetic']), fileName: 'synthetic.hdf5' })
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:synthetic-download')
-    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
 
-    const user = userEvent.setup()
     renderCaptureGroup()
 
-    const bannerDownloadBtn = await screen.findByRole('button', { name: '下载当前组 HDF5' })
-    await user.click(bannerDownloadBtn)
-    await waitFor(() => {
-      expect(download).toHaveBeenCalledWith(projectId, [groupId])
-    })
-    expect(revoke).toHaveBeenCalledWith('blob:synthetic-download')
+    await screen.findByText('人工复核已通过')
+    expect(screen.queryByRole('button', { name: '下载当前组 HDF5' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '下载 HDF5' })).toBeInTheDocument()
   })
 
   it('allows direct HDF5 download from the page header', async () => {

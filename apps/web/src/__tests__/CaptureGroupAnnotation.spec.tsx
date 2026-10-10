@@ -466,7 +466,7 @@ describe('CaptureGroup annotation workflow', () => {
       'true',
     )
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '查看复核详情' }))
+    await user.click(screen.getByText('查看复核详情'))
     expect(screen.getByText('00:12.345 → 00:18.760')).toBeInTheDocument()
     expect(screen.getByText('00:00 → 00:01')).toBeInTheDocument()
     await user.click(await screen.findByText('更多信息'))
