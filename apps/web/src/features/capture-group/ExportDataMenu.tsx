@@ -117,7 +117,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
       <Modal
         open={open}
         title="导出数据"
-        width={720}
+        width={620}
         destroyOnHidden
         closable={!loading}
         mask={{ closable: !loading }}
@@ -182,7 +182,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                   selectedIds.has(row.capture_group_id) ? 'is-selected ant-table-row-selected' : ''
                 }
                 dataSource={rows}
-                scroll={rows.length > 5 ? { y: 320 } : undefined}
+                scroll={rows.length > 5 ? { y: 270 } : undefined}
                 locale={{ emptyText: '当前项目暂无已完成并通过确认的人工标注数据。' }}
                 onRow={(row) => ({
                   onClick: (event) => {
@@ -216,7 +216,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                       </Checkbox>
                     ),
                     key: 'select',
-                    width: 76,
+                    width: 72,
                     render: (_, row) => (
                       <Checkbox
                         aria-label={`选择导出 ${row.capture_group_key ?? shortId(row.capture_group_id)}`}
@@ -243,9 +243,9 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                   {
                     title: '采集时间',
                     key: 'device_time',
-                    width: 180,
+                    width: 200,
                     render: (_, row) => (
-                      <span className="muted-text">
+                      <span className="muted-text" style={{ whiteSpace: 'nowrap' }}>
                         {formatDateTime(row.device_time_utc ?? row.created_at)}
                       </span>
                     ),
@@ -256,7 +256,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                     width: 80,
                     align: 'right',
                     render: (_, row) => (
-                      <span className="export-camera-badge">
+                      <span className="muted-text" style={{ whiteSpace: 'nowrap' }}>
                         {row.received_camera_count > 0 ? `${row.received_camera_count} 机位` : '—'}
                       </span>
                     ),
