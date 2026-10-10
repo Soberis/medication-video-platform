@@ -125,9 +125,16 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
         footer={
           <div className="capture-group-export-modal-footer">
             <div className="capture-group-export-footer-info">
-              <span className="capture-group-export-selected-count" role="status">
-                已选择 {selectedExportIds.length} 条
-              </span>
+              <div className="capture-group-export-count-wrapper">
+                <span className="capture-group-export-selected-count" role="status">
+                  已选择 {selectedExportIds.length} 条
+                </span>
+                {rows.length > 0 ? (
+                  <span className="export-modal-total-hint">
+                    / 共 {rows.length} 条
+                  </span>
+                ) : null}
+              </div>
               <span className="export-modal-subhint">
                 仅导出勾选记录；下载时仍会检查当前媒体与标注来源是否有效。
               </span>
@@ -153,11 +160,9 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
       >
         <section aria-label="HDF5 演示数据导出">
           <div className="export-modal-description">
-            <p>
-              HDF5 演示数据包含已复核人工动作区间、标签来源与双手时间步对齐手部关键点（v2
-              开箱即训精简格式）。
+            <p className="export-modal-header-desc">
+              仅包含已复核动作区间与双手骨骼对齐数据（HDF5 v2 格式）
             </p>
-            <p>文件不包含 MP4、对象存储地址、患者身份或机器人控制动作；仅限合成数据配置导出。</p>
           </div>
           {readState === 'loading' ? (
             <LoadingState>正在读取当前项目的导出候选…</LoadingState>
@@ -251,7 +256,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                     width: 80,
                     align: 'right',
                     render: (_, row) => (
-                      <span className="muted-text">
+                      <span className="export-camera-badge">
                         {row.received_camera_count > 0 ? `${row.received_camera_count} 机位` : '—'}
                       </span>
                     ),
