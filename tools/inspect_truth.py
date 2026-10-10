@@ -27,8 +27,13 @@ import cv2
 PROJECT_ID = "944a19eb-03b1-4b55-98fb-f8e108e23d92"
 CLIP_ASSET_ID = "bafcf62f-fb2b-42a9-bb05-be24be1f03b2" # BV18gKB6rEZU
 DEMO_NAME = "demo_000000"
-HDF5_PATH = "exports/medication_demo_v2.hdf5"
-OUTPUT_DIR = "exports/inspection"
+HDF5_PATH = os.environ.get(
+    "HDF5_PATH",
+    "exports/hdf5/medication_demo_v2.hdf5"
+    if os.path.exists("exports/hdf5/medication_demo_v2.hdf5")
+    else "exports/medication_demo_v2.hdf5",
+)
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "exports/inspection")
 ADMIN_TOKEN = "synthetic-local-admin-bearer-token-do-not-reuse"
 
 # MediaPipe 21 手部关键点连线拓扑

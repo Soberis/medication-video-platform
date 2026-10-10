@@ -97,7 +97,8 @@ run_summary.json*
 
 # Generated exports and datasets
 datasets/
-exports/
+exports/*
+!exports/README.md
 frames/
 SHA256SUMS.generated
 
