@@ -10,7 +10,7 @@
 
 这不是每次任务的全量阅读清单；按改动类型读取相关入口，无关分支直接跳过：
 
-- 需求、验收或导出语义：先读 [需求入口](docs/requirements/README.md) 指向的 V1.35 Consolidated Baseline；当前产品语义为 V1.35，V1.28 是上一正式运行时基线，D1–D5 是实施前决策门禁。历史 V1.x 只在迁移、兼容性或审计需要时读取，不从历史推断当前范围。
+- 需求、验收或导出语义：先读 [需求入口](docs/requirements/README.md) 指向的 V1.36 Consolidated Baseline；当前产品语义为 V1.36，V1.28 是上一正式运行时基线，D1–D5 是实施前决策门禁。历史 V1.x 只在迁移、兼容性或审计需要时读取，不从历史推断当前范围。
 - UI/UX：读取 `docs/DESIGN_SYSTEM.md`；只有需要领域交互、状态或前端验收规则时再读 `docs/architecture/web-ux-and-frontend-guidelines.md`。
 - 架构决策、API、事件、Schema 或数据库：分别读取相关 `docs/adr/`、`contracts/`、迁移和专题文档。
 - 真实代码、数据库迁移和实际测试结果用于核对实现事实；发现冲突时说明影响，不自行猜测或扩大范围。
@@ -29,7 +29,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 - 核心领域模块为 `iamproject`、`assetcapture`、`mediaprivacy`、`annotationreview`、`qualitycleaning`、`datasetexport`、`aicandidate`、`governance`。
 - `integration` 是 CVAT、S3、RabbitMQ、OIDC 等端口和适配器层，不拥有业务真值。
 - Python Worker 只处理媒体和 AI 作业，不直接写业务表；当前唯一 `human-demonstration-hdf5.v2` 由 Core API 校验后导出，旧扁平展开表与 CSV 为历史格式。
-- AI 输出只能进入 `CandidateAnnotation`；动作候选与 MediaPipe 检测事实区分存取，不得直接写成人工质量、正式标注、Review 或 Cleaning 结论。各机位均为等权客观观测，手部与动作自动检测，多视角实事求是一一对应；HDF5 关联当前已批准人工区间与同源、provenance 有效的各机位手部样本，不人为设立主副机位。
+- AI 输出进入 `CandidateAnnotation`，手部检测进入 `HandPoseCandidate`；双合格时由 Core API 自动执行乐观核准（生成首份 Revision 并标记 APPROVED 与 COMPLETED，直接准入导出）。各机位均为等权客观观测，手部与动作自动检测，多视角实事求是一一对应；HDF5 关联当前已批准人工/系统核准区间与同源、provenance 有效的各机位手部样本，不人为设立主副机位。
 - Redis 不作为事实数据库；RabbitMQ 不保存最终业务状态；对象存储不承载关系型业务状态。
 
 ## Module Boundaries
@@ -44,7 +44,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 
 ## Delivery Order
 
-接入事实按下列顺序建立。V1.35 目标为媒体就绪后默认自动生成候选、人工可修改、最后显式提交。AI 不依赖人工任务、负责人或人工质量；所有 ACTIVE 项目适用。已有任务使用绑定 schema，无任务时冻结已发布全局 schema，不等待 MediaPipe。人工任务在提交步骤按既有权限准备；候选初始化不创建正式 Revision 或 Review。真实 Worker 联调单独验收。
+接入事实按下列顺序建立。V1.36 目标为媒体就绪后默认自动生成候选与手部检测，双合格时系统在后台执行乐观自动核准（生成首份 Revision 并标记 APPROVED 与 COMPLETED，直接准入导出）；人工仅负责异常管理，抽检发现瑕疵时可随时在工作台一键【重新编辑】打回为草稿微调并重新提交。AI 不依赖人工任务、负责人或人工质量；所有 ACTIVE 项目适用。已有任务使用绑定 schema，无任务时冻结已发布全局 schema，不等待 MediaPipe。真实 Worker 联调单独验收。
 
 ```text
 External Ingest / Upload
@@ -52,12 +52,14 @@ External Ingest / Upload
 → CameraStream / ClipAsset
 → Media Probe
    ├─ MediaPipe detection evidence (all cameras)
-   └─ action candidate → editable draft → explicit human submit → existing review
-                              ↓
-                    existing admission → HDF5 Export
+   └─ action candidate
+          ↓ (手部与动作双合格)
+     乐观自动核准 (Revision 1, APPROVED) → HDF5 导出准入
+          ↕ (抽检异常一键重新编辑)
+     人工草稿 (DRAFT) → 显式重新提交 (Revision 2, APPROVED)
 ```
 
-MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 `CandidateAnnotation`，不得改写人工质量、正式标注、Review 或 Cleaning。各机位手部骨骼与动作候选均为自动并发检测生成，并与物理动作事实一一对应。人工提交与复核涵盖组内各机位的动作对应与手部质量核验，不再只针对单一机位。当前 HDF5 配套导出必须同时满足全机位对应确认、MediaPipe 与既有准入，不恢复独立 CSV。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
+MediaPipe 手部预标注是数据处理主链的辅助能力；手部骨骼与动作候选均为自动并发检测生成，并与物理动作事实一一对应。若 AI 检测失败或未检出手部样本，系统不触发自动核准，保持待人工介入状态。人工提交与复核涵盖组内各机位的动作对应与手部质量核验，不再只针对单一机位。当前 HDF5 配套导出必须同时满足全机位对应确认、MediaPipe 与既有准入，不恢复独立 CSV。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
 
 ## MVP Simplicity
 
@@ -67,7 +69,7 @@ MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 
 - 能在一个 Core API 数据库事务内可靠完成的操作，不引入消息、缓存或额外进程。耗时、跨进程或需要重试的工作才建立异步作业。
 - 默认优先交付一个可运行、可测试、可回退的纵向切片；用户明确要求的多个独立变更仍可在同一任务内完成，不因首个切片完成而提前结束。
 - UI 优先使用浏览器和现有组件库的原生能力；没有明确需求时，不引入新的设计系统、状态管理、播放器框架或动画库。
-- V1.35 Consolidated Baseline 不恢复未接线的 CaptureSync runtime，不新增持久化工作流投影、`next_action` / `blockers` 或通用工作流引擎；现役 `CaptureGroupView` 只读模型与前端派生提示保留。不恢复独立单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留；runtime 收缩按对应 D1–D5 决策及任务授权执行，各项决策不构成全部工作的统一阻塞条件。
+- V1.36 Consolidated Baseline 不恢复未接线的 CaptureSync runtime，不新增持久化工作流投影、`next_action` / `blockers` 或通用工作流引擎；现役 `CaptureGroupView` 只读模型与前端派生提示保留。不恢复独立单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留；runtime 收缩按对应 D1–D5 决策及任务授权执行，各项决策不构成全部工作的统一阻塞条件。
 
 ## Data And Safety
 
