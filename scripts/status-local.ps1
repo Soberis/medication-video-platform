@@ -115,9 +115,11 @@ if (Test-Path -LiteralPath $runtimeFile) {
     try {
         $json = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json
         if ($json) {
+            $validNames = @('cmd', 'powershell', 'pwsh', 'node', 'java', 'python', 'uv')
             foreach ($prop in $json.PSObject.Properties) {
                 $entry = $prop.Value
-                $running = $null -ne (Get-Process -Id $entry.processId -ErrorAction SilentlyContinue)
+                $proc = Get-Process -Id $entry.processId -ErrorAction SilentlyContinue
+                $running = ($null -ne $proc) -and ($validNames -contains $proc.ProcessName.ToLower())
                 $state = if ($running) { 'running' } else { 'stale record' }
                 Write-Host "- $($entry.name): $state (PID $($entry.processId)); log: $($entry.log)"
             }

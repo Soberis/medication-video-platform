@@ -28,8 +28,15 @@ function Import-LocalEnvironment {
 function Stop-ProcessTree {
     param([int]$ManagedProcessId, [string]$Description)
 
-    if ($null -eq (Get-Process -Id $ManagedProcessId -ErrorAction SilentlyContinue)) {
+    $proc = Get-Process -Id $ManagedProcessId -ErrorAction SilentlyContinue
+    if ($null -eq $proc) {
         Write-Host "$Description is not running (PID $ManagedProcessId)." -ForegroundColor Yellow
+        return
+    }
+
+    $validNames = @('cmd', 'powershell', 'pwsh', 'node', 'java', 'python', 'uv')
+    if (-not ($validNames -contains $proc.ProcessName.ToLower())) {
+        Write-Host "$Description PID $ManagedProcessId was recycled by unrelated process '$($proc.ProcessName)'; skipping." -ForegroundColor Yellow
         return
     }
 

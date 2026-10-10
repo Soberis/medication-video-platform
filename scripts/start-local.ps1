@@ -171,7 +171,13 @@ function Test-ManagedProcessRunning {
         return $false
     }
 
-    return $null -ne (Get-Process -Id $managedProcesses[$Key].processId -ErrorAction SilentlyContinue)
+    $proc = Get-Process -Id $managedProcesses[$Key].processId -ErrorAction SilentlyContinue
+    if ($null -eq $proc) {
+        return $false
+    }
+
+    $validNames = @('cmd', 'powershell', 'pwsh', 'node', 'java', 'python', 'uv')
+    return $validNames -contains $proc.ProcessName.ToLower()
 }
 
 function Restart-ManagedApi {
