@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,8 @@ from typing import Any
 import av
 import mediapipe as mp
 import numpy as np
+
+LOGGER = logging.getLogger(__name__)
 
 ALGORITHM_KEY = "MEDIAPIPE_HAND_LANDMARKER"
 ALGORITHM_VERSION = "v1"
@@ -95,145 +98,166 @@ def _detect_all(
         last_timestamp = -1
         next_sample: int | None = None
         sample_interval = 1000 // sampling_fps
-        for frame in container.decode(stream):
-            total_video_frames += 1
-            timestamp = _timestamp_ms(frame, stream, last_timestamp)
-            last_timestamp = timestamp
-            if next_sample is None:
-                next_sample = timestamp
-            if timestamp < next_sample:
-                continue
-            # Advance the fixed grid, not the selected frame, without inventing
-            # samples when source frames are sparse or timestamps have a gap.
-            next_sample += ((timestamp - next_sample) // sample_interval + 1) * sample_interval
-            inference_frame_count += 1
-            rgb = frame.to_ndarray(format="rgb24")
-            if isinstance(rgb, np.ndarray):
-                if not rgb.flags.c_contiguous:
-                    rgb = np.ascontiguousarray(rgb, dtype=np.uint8)
-                else:
-                    rgb = np.require(rgb, dtype=np.uint8, requirements=["C", "A"])
-            try:
-                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            except OSError:
-                invalid_hand_frame_count += 1
-                frames_without_hand += 1
-                continue
-            result = detector.detect_for_video(mp_image, timestamp)
-            frame_candidates: list[dict[str, object]] = []
-            frame_left_count = 0
-            frame_right_count = 0
-            has_landmarks_field = hasattr(result, "hand_landmarks")
-            raw_landmarks = getattr(result, "hand_landmarks", [])
-            frame_has_invalid_hand = not has_landmarks_field
-            if has_landmarks_field:
-                try:
-                    detected_landmarks = list(raw_landmarks)
-                except TypeError:
-                    # ``None``/non-iterable detector output is an invalid
-                    # observation, not a legitimate no-hand frame.
-                    detected_landmarks = []
-                    frame_has_invalid_hand = True
-            else:
-                detected_landmarks = []
-            frame_has_invalid_hand |= len(detected_landmarks) > MAX_HANDS
-            handedness_groups = getattr(result, "handedness", [])
-            for index, landmarks in enumerate(detected_landmarks[:MAX_HANDS]):
-                try:
-                    points_in_observation = list(landmarks)
-                except TypeError:
-                    points_in_observation = []
-                    frame_has_invalid_hand = True
-                landmark_count = len(points_in_observation)
-                if landmark_count != 21:
-                    invalid_landmark_count += abs(landmark_count - 21)
-                    frame_has_invalid_hand = True
+        av_errors: tuple[type[BaseException], ...] = ()
+        if hasattr(av, "error"):
+            av_errors = tuple(
+                e
+                for name in ("InvalidDataError", "CorruptDataError", "FFmpegError")
+                if (e := getattr(av.error, name, None)) and isinstance(e, type) and issubclass(e, BaseException)
+            )
+        try:
+            for frame in container.decode(stream):
+                total_video_frames += 1
+                timestamp = _timestamp_ms(frame, stream, last_timestamp)
+                last_timestamp = timestamp
+                if next_sample is None:
+                    next_sample = timestamp
+                if timestamp < next_sample:
+                    del frame
+                    if total_video_frames % 500 == 0:
+                        import gc
+                        gc.collect()
                     continue
-
-                points: list[dict[str, float]] = []
-                invalid_points = 0
-                for point in points_in_observation:
+                # Advance the fixed grid, not the selected frame, without inventing
+                # samples when source frames are sparse or timestamps have a gap.
+                next_sample += ((timestamp - next_sample) // sample_interval + 1) * sample_interval
+                inference_frame_count += 1
+                frame_width = int(getattr(frame, "width", 0))
+                frame_height = int(getattr(frame, "height", 0))
+                try:
+                    rgb = frame.to_ndarray(format="rgb24")
+                except (Exception, MemoryError):
+                    del frame
+                    invalid_hand_frame_count += 1
+                    frames_without_hand += 1
+                    continue
+                del frame
+                if isinstance(rgb, np.ndarray):
+                    if not rgb.flags.c_contiguous:
+                        rgb = np.ascontiguousarray(rgb, dtype=np.uint8)
+                    else:
+                        rgb = np.require(rgb, dtype=np.uint8, requirements=["C", "A"])
+                try:
+                    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                except OSError:
+                    del rgb
+                    invalid_hand_frame_count += 1
+                    frames_without_hand += 1
+                    continue
+                result = detector.detect_for_video(mp_image, timestamp)
+                del mp_image
+                frame_candidates: list[dict[str, object]] = []
+                frame_left_count = 0
+                frame_right_count = 0
+                has_landmarks_field = hasattr(result, "hand_landmarks")
+                raw_landmarks = getattr(result, "hand_landmarks", [])
+                frame_has_invalid_hand = not has_landmarks_field
+                if has_landmarks_field:
                     try:
-                        values = {"x": float(point.x), "y": float(point.y), "z": float(point.z)}
-                    except (AttributeError, TypeError, ValueError):
-                        invalid_points += 1
+                        detected_landmarks = list(raw_landmarks)
+                    except TypeError:
+                        # ``None``/non-iterable detector output is an invalid
+                        # observation, not a legitimate no-hand frame.
+                        detected_landmarks = []
+                        frame_has_invalid_hand = True
+                else:
+                    detected_landmarks = []
+                frame_has_invalid_hand |= len(detected_landmarks) > MAX_HANDS
+                handedness_groups = getattr(result, "handedness", [])
+                for index, landmarks in enumerate(detected_landmarks[:MAX_HANDS]):
+                    try:
+                        points_in_observation = list(landmarks)
+                    except TypeError:
+                        points_in_observation = []
+                        frame_has_invalid_hand = True
+                    landmark_count = len(points_in_observation)
+                    if landmark_count != 21:
+                        invalid_landmark_count += abs(landmark_count - 21)
+                        frame_has_invalid_hand = True
                         continue
-                    if not all(math.isfinite(value) for value in values.values()):
-                        invalid_points += 1
+
+                    points: list[dict[str, float]] = []
+                    invalid_points = 0
+                    for point in points_in_observation:
+                        try:
+                            values = {"x": float(point.x), "y": float(point.y), "z": float(point.z)}
+                        except (AttributeError, TypeError, ValueError):
+                            invalid_points += 1
+                            continue
+                        if not all(math.isfinite(value) for value in values.values()):
+                            invalid_points += 1
+                            continue
+                        points.append(values)
+                    invalid_landmark_count += invalid_points
+                    if invalid_points > 0:
+                        frame_has_invalid_hand = True
                         continue
-                    points.append(values)
-                invalid_landmark_count += invalid_points
-                if invalid_points > 0:
-                    frame_has_invalid_hand = True
-                    continue
 
-                category = _first_category(handedness_groups, index)
-                handedness_score = _handedness_score(category)
-                try:
-                    image_width = int(frame.width)
-                    image_height = int(frame.height)
-                except (AttributeError, OverflowError, TypeError, ValueError):
-                    image_width = 0
-                    image_height = 0
-                if handedness_score is None or image_width <= 0 or image_height <= 0:
-                    frame_has_invalid_hand = True
-                    continue
-                normalized_handedness = _handedness(
-                    None if category is None else getattr(category, "category_name", None)
-                )
-                if normalized_handedness is None:
-                    frame_has_invalid_hand = True
-                    continue
+                    category = _first_category(handedness_groups, index)
+                    handedness_score = _handedness_score(category)
+                    image_width = frame_width
+                    image_height = frame_height
+                    if handedness_score is None or image_width <= 0 or image_height <= 0:
+                        frame_has_invalid_hand = True
+                        continue
+                    normalized_handedness = _handedness(
+                        None if category is None else getattr(category, "category_name", None)
+                    )
+                    if normalized_handedness is None:
+                        frame_has_invalid_hand = True
+                        continue
 
-                min_x, max_x = (
-                    min(point["x"] for point in points),
-                    max(point["x"] for point in points),
-                )
-                min_y, max_y = (
-                    min(point["y"] for point in points),
-                    max(point["y"] for point in points),
-                )
-                bounding_box = {
-                    "x": min_x,
-                    "y": min_y,
-                    "width": max(max_x - min_x, 0.000001),
-                    "height": max(max_y - min_y, 0.000001),
-                }
-                if not all(math.isfinite(value) for value in bounding_box.values()):
-                    frame_has_invalid_hand = True
-                    continue
-                candidate = {
-                    "frame_timestamp_ms": timestamp,
-                    "image_width": image_width,
-                    "image_height": image_height,
-                    "hand_index": index,
-                    "handedness": normalized_handedness,
-                    "handedness_score": handedness_score,
-                    "bounding_box": bounding_box,
-                    "landmarks": points,
-                    "valid_landmark_count": 21,
-                }
-                frame_candidates.append(candidate)
-                if normalized_handedness == "LEFT":
-                    frame_left_count += 1
-                elif normalized_handedness == "RIGHT":
-                    frame_right_count += 1
-            if frame_has_invalid_hand:
-                invalid_hand_frame_count += 1
-            elif frame_candidates:
-                candidates.extend(frame_candidates)
-                frames_with_hand += 1
-                left_hand_detection_count += frame_left_count
-                right_hand_detection_count += frame_right_count
-            else:
-                # Invalid-only frames are intentionally excluded from both
-                # hand/no-hand counts.  A true no-hand observation is only an
-                # empty, structurally valid detector result.
-                frames_without_hand += 1
-            del rgb
-            if inference_frame_count % 100 == 0:
-                import gc
-                gc.collect()
+                    min_x, max_x = (
+                        min(point["x"] for point in points),
+                        max(point["x"] for point in points),
+                    )
+                    min_y, max_y = (
+                        min(point["y"] for point in points),
+                        max(point["y"] for point in points),
+                    )
+                    bounding_box = {
+                        "x": min_x,
+                        "y": min_y,
+                        "width": max(max_x - min_x, 0.000001),
+                        "height": max(max_y - min_y, 0.000001),
+                    }
+                    if not all(math.isfinite(value) for value in bounding_box.values()):
+                        frame_has_invalid_hand = True
+                        continue
+                    candidate = {
+                        "frame_timestamp_ms": timestamp,
+                        "image_width": image_width,
+                        "image_height": image_height,
+                        "hand_index": index,
+                        "handedness": normalized_handedness,
+                        "handedness_score": handedness_score,
+                        "bounding_box": bounding_box,
+                        "landmarks": points,
+                        "valid_landmark_count": 21,
+                    }
+                    frame_candidates.append(candidate)
+                    if normalized_handedness == "LEFT":
+                        frame_left_count += 1
+                    elif normalized_handedness == "RIGHT":
+                        frame_right_count += 1
+                if frame_has_invalid_hand:
+                    invalid_hand_frame_count += 1
+                elif frame_candidates:
+                    candidates.extend(frame_candidates)
+                    frames_with_hand += 1
+                    left_hand_detection_count += frame_left_count
+                    right_hand_detection_count += frame_right_count
+                else:
+                    # Invalid-only frames are intentionally excluded from both
+                    # hand/no-hand counts.  A true no-hand observation is only an
+                    # empty, structurally valid detector result.
+                    frames_without_hand += 1
+                del rgb
+                if inference_frame_count % 50 == 0:
+                    import gc
+                    gc.collect()
+        except av_errors as exc:
+            LOGGER.warning("Encountered corrupt video packet during decoding, completed with %d decoded frames: %s", total_video_frames, exc)
 
     return InferenceSummary(
         total_video_frames=total_video_frames,

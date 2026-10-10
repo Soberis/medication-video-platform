@@ -193,8 +193,8 @@ SELECT
     WHEN mp.hand_result = 'NO_HAND_DETECTED' THEN 'NO_HAND'
     WHEN mp.status = 'FAILED' OR qw.status = 'FAILED' THEN 'FAILED'
     WHEN mp.status IN ('QUEUED', 'RUNNING') OR qw.status IN ('QUEUED', 'RUNNING') THEN 'PROCESSING'
-    WHEN mp.hand_result = 'HAND_DETECTED' AND qw.status = 'SUCCEEDED' THEN 'READY'
-    WHEN mp.hand_result = 'HAND_DETECTED' THEN 'READY'
+    WHEN mp.hand_result = 'HAND_DETECTED' AND (SELECT count(*) FROM action_candidate ac WHERE ac.capture_group_id = cs.capture_session_id) > 0 THEN 'READY'
+    WHEN mp.hand_result = 'HAND_DETECTED' THEN 'NO_ACTION'
     ELSE 'PENDING'
   END as pipeline_status
 FROM capture_session cs
@@ -210,6 +210,7 @@ ORDER BY cs.created_at DESC;
   let processingCount = 0
   let invalidCount = 0
   let noHandCount = 0
+  let noActionCount = 0
   let failedCount = 0
   let pendingCount = 0
 
@@ -225,9 +226,10 @@ ORDER BY cs.created_at DESC;
       readyCount++
     } else if (item.pipeline_status === 'PROCESSING') {
       processingCount++
-    } else if (item.pipeline_status === 'NO_HAND' || item.pipeline_status === 'FAILED') {
+    } else if (item.pipeline_status === 'NO_HAND' || item.pipeline_status === 'FAILED' || item.pipeline_status === 'NO_ACTION') {
       invalidCount++
       if (item.pipeline_status === 'NO_HAND') noHandCount++
+      if (item.pipeline_status === 'NO_ACTION') noActionCount++
       if (item.pipeline_status === 'FAILED') failedCount++
     } else {
       pendingCount++
@@ -241,6 +243,7 @@ ORDER BY cs.created_at DESC;
       processing: processingCount,
       invalid: invalidCount,
       noHand: noHandCount,
+      noAction: noActionCount,
       failed: failedCount,
       pending: pendingCount,
     },
@@ -253,7 +256,7 @@ export function cleanInvalidCaptureGroups(options = {}) {
   if (!targetIds || !targetIds.length) {
     const pipeline = getCaptureGroupsPipelineStatus(options.projectId)
     targetIds = Object.entries(pipeline.items)
-      .filter(([_, item]) => item.pipeline_status === 'NO_HAND' || item.pipeline_status === 'FAILED')
+      .filter(([_, item]) => item.pipeline_status === 'NO_HAND' || item.pipeline_status === 'FAILED' || item.pipeline_status === 'NO_ACTION')
       .map(([id]) => id)
   }
   if (!targetIds.length) return { ok: true, deletedCount: 0 }

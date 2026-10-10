@@ -107,3 +107,6 @@ SHA256SUMS.generated
 .playwright-cli/
 .agents/
 
+# Temporary test screenshots
+/*.png
+screenshot-*.png

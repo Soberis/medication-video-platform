@@ -1,11 +1,44 @@
-import { readdir, readFile, access, stat } from 'node:fs/promises'
+import { readdir, readFile, access, stat, appendFile, mkdir } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { homedir } from 'node:os'
-import { parseArgs } from 'node:util'
+import { parseArgs, promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+
+const execFileAsync = promisify(execFile)
+
+/**
+ * 准入门禁探针：调用本地轻量 Python/MediaPipe 快速抽检视频关键帧是否存在手部
+ */
+export async function checkVideoHandsPreflight(videoPath) {
+  try {
+    const pythonScript = resolve('tools/preflight_hand_check.py')
+    const aiWorkerDir = resolve('workers/ai-worker')
+    const { stdout } = await execFileAsync(
+      'uv',
+      ['--directory', aiWorkerDir, 'run', 'python', pythonScript, videoPath],
+      { timeout: 25000, windowsHide: true }
+    )
+    const lines = stdout.trim().split(/\r?\n/)
+    const lastLine = lines[lines.length - 1]
+    const parsed = JSON.parse(lastLine)
+    return Boolean(parsed.ok && parsed.has_hands)
+  } catch (err) {
+    if (err.stdout) {
+      try {
+        const lines = err.stdout.trim().split(/\r?\n/)
+        const lastLine = lines[lines.length - 1]
+        const parsed = JSON.parse(lastLine)
+        if (parsed.ok && parsed.has_hands === false) {
+          return false
+        }
+      } catch {}
+    }
+    return false
+  }
+}
 
 import { SyntheticUploadClient, PlatformApiError } from './synthetic-upload-client/upload-client.mjs'
 import { SyntheticCaptureGroupWorkflowClient } from './synthetic-capture-group-client/workflow-client.mjs'
@@ -239,6 +272,8 @@ export async function main() {
       cameraSetKey: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       dryRun: { type: 'boolean', default: false },
+      'preflight-hand-gate': { type: 'boolean', default: true },
+      'no-preflight': { type: 'boolean', default: false },
       open: { type: 'boolean', default: true },
       'no-open': { type: 'boolean', default: false },
     },
@@ -246,6 +281,7 @@ export async function main() {
   })
 
   const isDryRun = Boolean(values['dry-run'] || values.dryRun)
+  const enablePreflight = !values['no-preflight'] && Boolean(values['preflight-hand-gate'])
   const cameraSetKey = values['camera-set-key'] || values.cameraSetKey || DEFAULT_CAMERA_SET_KEY
   const requestedProject = positionals[0] || values.project || null
   const limit = values.limit ? parseInt(values.limit, 10) : Infinity
@@ -336,6 +372,7 @@ export async function main() {
   let successCount = 0
   let failCount = 0
   let firstGroupUrl = null
+  const rejectedPreflight = []
 
   for (let i = 0; i < batchList.length; i++) {
     const item = batchList[i]
@@ -343,9 +380,28 @@ export async function main() {
     const groupKey = item.groupKey
     const sourceBatchId = `batch-${item.platform}-${randomUUID()}`
 
-    console.log(`\n${idxStr} 正在读取并上传 [${item.platform}]: ${item.videoId}`)
+    console.log(`\n${idxStr} 正在准备 [${item.platform}]: ${item.videoId}`)
     console.log(`  标题: ${item.title}`)
     console.log(`  作者: ${item.author} | 时长: ${item.duration || '未知'}`)
+
+    // 准入门禁探针
+    if (enablePreflight) {
+      process.stdout.write(`  [准入门禁] 正在执行前置手部探测 (Pre-flight Hand Gate)... `)
+      const hasHands = await checkVideoHandsPreflight(item.videoPath)
+      if (!hasHands) {
+        console.log(`❌ 拦截拒收 (抽样未检出手部，判定为非临床操作或坏样本)`)
+        rejectedPreflight.push({
+          folderName: item.folderName,
+          platform: item.platform,
+          videoId: item.videoId,
+          videoPath: item.videoPath,
+          reason: '前置手部门禁未通过 (抽检未发现手部)',
+          timestamp: new Date().toISOString(),
+        })
+        continue
+      }
+      console.log(`✅ 准入通过 (手部目标在场)`)
+    }
 
     try {
       const bytes = await readFile(item.videoPath)
@@ -381,10 +437,23 @@ export async function main() {
     }
   }
 
+  if (rejectedPreflight.length > 0) {
+    try {
+      const reportsDir = resolve('exports/reports')
+      await mkdir(reportsDir, { recursive: true })
+      const logFile = join(reportsDir, 'import_rejected_unqualified.jsonl')
+      const lines = rejectedPreflight.map((r) => JSON.stringify(r)).join('\n') + '\n'
+      await appendFile(logFile, lines, 'utf-8')
+      console.log(`📋 门禁拦截清单已追加归档至: ${logFile}`)
+    } catch {
+      // 忽略日志写入错误
+    }
+  }
+
   console.log('\n======================================================')
   console.log('            多源网络视频批量导入完成！')
   console.log('======================================================')
-  console.log(`本次执行结果 : 成功 ${successCount} 个，失败 ${failCount} 个`)
+  console.log(`本次执行结果 : 成功入库 ${successCount} 个，门禁拦截拒收 ${rejectedPreflight.length} 个，失败 ${failCount} 个`)
   console.log(`项目概览链接 : ${values.webUrl.replace(/\/$/, '')}/projects/${targetProjectId}`)
 
   if (firstGroupUrl && values.open && !values['no-open']) {

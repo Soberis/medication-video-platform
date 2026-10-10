@@ -88,3 +88,9 @@ test('extractAuthorFromFolderName extracts creator suffix from standard folder c
     null,
   )
 })
+
+test('checkVideoHandsPreflight gracefully handles non-existent or invalid files', async () => {
+  const { checkVideoHandsPreflight } = await import('./import-web-video-batch.mjs')
+  const result = await checkVideoHandsPreflight('non_existent_path_dummy.mp4')
+  assert.equal(result, false)
+})

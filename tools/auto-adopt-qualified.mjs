@@ -41,7 +41,12 @@ WHERE cs.receipt_state = 'COMPLETE'
     SELECT 1 FROM ai_job hj 
     WHERE hj.clip_asset_id = s.clip_asset_id 
       AND hj.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER' 
+      AND hj.hand_result = 'HAND_DETECTED'
       AND hj.status = 'SUCCEEDED'
+  )
+  AND EXISTS (
+    SELECT 1 FROM candidate_annotation ca 
+    WHERE ca.clip_asset_id = s.clip_asset_id
   )
   AND EXISTS (
     SELECT 1 FROM ai_job aj 
@@ -74,6 +79,20 @@ LIMIT 1;
   const projectId = group.project_id
   const groupId = group.capture_session_id
 
+  // 严格安全守卫：必须且只能在检测到人手时才允许自动采纳核准
+  const handCheckSql = `
+    SELECT count(*) as hand_count
+    FROM camera_stream s
+    JOIN ai_job hj ON hj.clip_asset_id = s.clip_asset_id
+    WHERE s.capture_session_id = '${groupId}'
+      AND hj.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
+      AND hj.hand_result = 'HAND_DETECTED';
+  `
+  const handRows = runPsqlJson(handCheckSql)
+  if (!handRows || Number(handRows[0]?.hand_count || 0) === 0) {
+    throw new Error(`视频 ${group.capture_group_key} 未检出有效手部骨骼，严格安全拦截，禁止自动核准`)
+  }
+
   const authHeaders = {
     'Authorization': `Bearer ${ADMIN_TOKEN}`,
     'Content-Type': 'application/json',
@@ -94,12 +113,50 @@ LIMIT 1;
   const inputVersion = task.group_input_version
   const views = task.camera_views ?? []
 
+  if (task.status === 'COMPLETED') {
+    return { ok: true, capture_group_key: group.capture_group_key, capture_group_id: groupId, status: 'COMPLETED' }
+  }
+
+  // 若任务已经是 SUBMITTED 状态，查找最新修订并直接复核通过
+  if (task.status === 'SUBMITTED') {
+    let revisionId = task.annotation_revision?.annotation_revision_id
+    if (!revisionId) {
+      const revSql = `SELECT annotation_revision_id FROM annotation_revision WHERE annotation_task_id = '${taskId}' ORDER BY revision_number DESC LIMIT 1;`
+      const revRows = runPsqlJson(revSql)
+      revisionId = revRows[0]?.annotation_revision_id
+    }
+    if (revisionId) {
+      const reviewRes = await fetch(`${API_BASE}/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/review`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({
+          decision: 'APPROVED',
+          review_note: 'AI 自动核验通过',
+          reviewed_camera_numbers: views.map((v) => v.camera_number),
+          return_camera_numbers: [],
+        }),
+      })
+      if (!reviewRes.ok) {
+        throw new Error(`复核通过失败: ${await reviewRes.text()}`)
+      }
+      return { ok: true, capture_group_key: group.capture_group_key, capture_group_id: groupId, status: 'COMPLETED' }
+    }
+  }
+
   // 3. 为每个机位拉取候选动作并提交该机位视图
   const allSubmittedSegmentIds = []
   for (const view of views) {
     const cameraNumber = view.camera_number
     const clipId = view.clip_asset_id
     if (!clipId) continue
+
+    // 若本机位已处于 SUBMITTED 状态且已有段落，直接复用
+    if (view.state === 'SUBMITTED' && view.segments && view.segments.length > 0) {
+      for (const seg of view.segments) {
+        allSubmittedSegmentIds.push({ camera_number: cameraNumber, segment_id: seg.segment_id })
+      }
+      continue
+    }
 
     // 获取该机位的动作候选
     const candidatesRes = await fetch(
@@ -132,6 +189,10 @@ LIMIT 1;
       })
       .filter((s) => s.end_ms > s.start_ms)
 
+    const viewVerSql = `SELECT version FROM annotation_task_view WHERE annotation_task_id = '${taskId}' AND camera_number = ${cameraNumber} LIMIT 1;`
+    const viewVerRows = runPsqlJson(viewVerSql)
+    const currentViewVersion = viewVerRows[0]?.version !== undefined ? Number(viewVerRows[0].version) : view.version
+
     // 更新机位视图为 SUBMITTED
     const putViewRes = await fetch(
       `${API_BASE}/api/v1/projects/${projectId}/annotation-tasks/${taskId}/camera-views/${cameraNumber}`,
@@ -139,7 +200,7 @@ LIMIT 1;
         method: 'PUT',
         headers: { ...authHeaders, 'Idempotency-Key': crypto.randomUUID() },
         body: JSON.stringify({
-          expected_version: view.version,
+          expected_version: currentViewVersion,
           expected_input_version: inputVersion,
           state: 'SUBMITTED',
           segments,
@@ -162,36 +223,45 @@ LIMIT 1;
     throw new Error(`视频 ${group.capture_group_key} 无有效动作片段，无法自动采纳`)
   }
 
-  // 4. 提交整组标注修订
-  // 重新获取最新 task version
-  const latestTaskRes = await fetch(`${API_BASE}/api/v1/projects/${projectId}/annotation-tasks`, {
-    headers: authHeaders,
-  })
-  const taskList = await latestTaskRes.json()
-  const currentTask = taskList.items?.find((t) => t.annotation_task_id === taskId) ?? task
+  // 4. 提交整组标注修订（如果尚未提交）
+  const taskStatusSql = `SELECT task_status, version FROM annotation_task WHERE annotation_task_id = '${taskId}' LIMIT 1;`
+  const taskStatusRows = runPsqlJson(taskStatusSql)
+  const taskState = taskStatusRows[0]?.task_status || task.status
+  const currentTaskVersion = taskStatusRows[0]?.version !== undefined ? Number(taskStatusRows[0].version) : task.version
 
-  const correspondences = allSubmittedSegmentIds.map((item) => ({
-    correspondence_id: crypto.randomUUID(),
-    status: 'UNCERTAIN',
-    segments: [{ camera_number: item.camera_number, segment_id: item.segment_id }],
-    reason: '单机位自动采纳',
-  }))
+  let revisionId = null
+  if (taskState === 'SUBMITTED') {
+    const revSql = `SELECT annotation_revision_id FROM annotation_revision WHERE annotation_task_id = '${taskId}' ORDER BY revision_number DESC LIMIT 1;`
+    const revRows = runPsqlJson(revSql)
+    revisionId = revRows[0]?.annotation_revision_id
+  } else {
+    const correspondences = allSubmittedSegmentIds.map((item) => ({
+      correspondence_id: crypto.randomUUID(),
+      status: 'UNCERTAIN',
+      segments: [{ camera_number: item.camera_number, segment_id: item.segment_id }],
+      reason: '单机位自动采纳',
+    }))
 
-  const revisionRes = await fetch(`${API_BASE}/api/v1/projects/${projectId}/annotation-tasks/${taskId}/revisions`, {
-    method: 'POST',
-    headers: { ...authHeaders, 'Idempotency-Key': crypto.randomUUID() },
-    body: JSON.stringify({
-      expected_task_version: currentTask.version,
-      expected_input_version: inputVersion,
-      correspondences,
-      note: 'AI 自动采纳',
-    }),
-  })
-  if (!revisionRes.ok) {
-    throw new Error(`提交整组标注修订失败: ${await revisionRes.text()}`)
+    const revisionRes = await fetch(`${API_BASE}/api/v1/projects/${projectId}/annotation-tasks/${taskId}/revisions`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify({
+        expected_task_version: currentTaskVersion,
+        expected_input_version: inputVersion,
+        correspondences,
+        note: 'AI 自动采纳',
+      }),
+    })
+    if (!revisionRes.ok) {
+      throw new Error(`提交整组标注修订失败: ${await revisionRes.text()}`)
+    }
+    const revision = await revisionRes.json()
+    revisionId = revision.annotation_revision_id
   }
-  const revision = await revisionRes.json()
-  const revisionId = revision.annotation_revision_id
+
+  if (!revisionId) {
+    throw new Error(`未能获取修订 ID，无法完成复核`)
+  }
 
   // 5. 通过复核
   const reviewRes = await fetch(`${API_BASE}/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/review`, {
