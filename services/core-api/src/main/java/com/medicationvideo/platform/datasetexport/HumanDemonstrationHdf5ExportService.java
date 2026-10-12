@@ -79,8 +79,21 @@ class HumanDemonstrationHdf5ExportService {
 		return download(projectId, captureGroupIds, ExportOptions.DEFAULT);
 	}
 
+	@FunctionalInterface
+	interface ProgressCallback {
+
+		void onProgress(int current, int total, String currentLabel);
+
+	}
+
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	Path download(UUID projectId, List<UUID> captureGroupIds, ExportOptions options) {
+		return download(projectId, captureGroupIds, options, null);
+	}
+
+	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+	Path download(UUID projectId, List<UUID> captureGroupIds, ExportOptions options,
+			ProgressCallback progressCallback) {
 		requireSyntheticProfile();
 		var selectedIds = captureGroupIds == null ? List.<UUID>of() : captureGroupIds.stream().distinct().toList();
 		var snapshots = this.approvedCaptureGroupAnnotationQueryService.findApproved(projectId, selectedIds);
@@ -111,8 +124,23 @@ class HumanDemonstrationHdf5ExportService {
 				file.putAttribute("contains_robot_actions", false);
 				file.putAttribute("contains_raw_candidates", options.includeRawCandidates());
 				var data = file.putGroup("data");
-				for (var index = 0; index < groups.size(); index += 1) {
-					writeEpisode(data.putGroup("demo_%06d".formatted(index)), groups.get(index), projectId, options);
+				var total = groups.size();
+				if (progressCallback != null) {
+					progressCallback.onProgress(0, total, "正在准备写入 HDF5 数据集...");
+				}
+				for (var index = 0; index < total; index += 1) {
+					var exportGroup = groups.get(index);
+					var label = (exportGroup.snapshot() != null && exportGroup.snapshot().captureGroupId() != null)
+							? "demo_%06d (%s)".formatted(index,
+									exportGroup.snapshot().captureGroupId().toString().substring(0, 8))
+							: "demo_%06d".formatted(index);
+					if (progressCallback != null) {
+						progressCallback.onProgress(index, total, label);
+					}
+					writeEpisode(data.putGroup("demo_%06d".formatted(index)), exportGroup, projectId, options);
+					if (progressCallback != null) {
+						progressCallback.onProgress(index + 1, total, label);
+					}
 				}
 			}
 			return output;

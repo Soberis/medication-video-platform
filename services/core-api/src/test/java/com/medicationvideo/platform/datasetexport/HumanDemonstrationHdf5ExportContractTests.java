@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -182,6 +183,106 @@ class HumanDemonstrationHdf5ExportContractTests {
 		try (var file = HdfFile.fromBytes(bytes)) {
 			assertEquals(1, ((io.jhdf.api.Group) file.getByPath("/data")).getChildren().size());
 			assertEquals(second.captureGroupId().toString(),
+					file.getByPath("/data/demo_000000").getAttribute("capture_group_id").getData());
+		}
+	}
+
+	@Test
+	void exportsSelectedCaptureGroupsViaBatchPostEndpoint() throws Exception {
+		var first = createGroup(1, 1, "COMPLETE", 1);
+		var second = createGroup(1, 1, "COMPLETE", 1);
+		insertAiJob(first.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(100, 0, "LEFT", "0.9", 1)));
+		insertAiJob(second.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(200, 0, "RIGHT", "0.9", 2)));
+		approveRevision(first, 800, "first-selected-post-hdf5");
+		approveRevision(second, 800, "second-selected-post-hdf5");
+
+		var mvcResult = this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{
+						  "capture_group_ids": ["%s"],
+						  "include_raw_candidates": false,
+						  "tensor_layout": true
+						}
+						""".formatted(second.captureGroupId()))
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(request().asyncStarted())
+			.andReturn();
+		var bytes = this.mockMvc.perform(asyncDispatch(mvcResult))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Content-Disposition",
+					startsWith("attachment; filename=\"human_demonstration_hdf5_v2_event_")))
+			.andReturn()
+			.getResponse()
+			.getContentAsByteArray();
+		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals(1, ((io.jhdf.api.Group) file.getByPath("/data")).getChildren().size());
+			assertEquals(second.captureGroupId().toString(),
+					file.getByPath("/data/demo_000000").getAttribute("capture_group_id").getData());
+		}
+	}
+
+	@Test
+	void submitsPollsAndDownloadsHdf5ExportJob() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 1);
+		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(100, 0, "LEFT", "0.9", 1)));
+		approveRevision(group, 800, "job-export-hdf5");
+
+		var postResult = this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/jobs", PROJECT_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{
+						  "capture_group_ids": ["%s"]
+						}
+						""".formatted(group.captureGroupId()))
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.task_id").isNotEmpty())
+			.andExpect(jsonPath("$.status").value("PROCESSING"))
+			.andReturn();
+
+		var taskId = com.jayway.jsonpath.JsonPath.read(postResult.getResponse().getContentAsString(), "$.task_id")
+			.toString();
+
+		var deadline = System.currentTimeMillis() + 15000;
+		while (System.currentTimeMillis() < deadline) {
+			var pollResult = this.mockMvc
+				.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/jobs/{taskId}", PROJECT_ID,
+						taskId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andReturn();
+			var status = com.jayway.jsonpath.JsonPath.read(pollResult.getResponse().getContentAsString(), "$.status")
+				.toString();
+			if ("COMPLETED".equals(status)) {
+				break;
+			}
+			Thread.sleep(100);
+		}
+
+		var downloadResult = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/jobs/{taskId}/download", PROJECT_ID,
+					taskId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(request().asyncStarted())
+			.andReturn();
+
+		var bytes = this.mockMvc.perform(asyncDispatch(downloadResult))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Content-Disposition",
+					startsWith("attachment; filename=\"human_demonstration_hdf5_v2_event_")))
+			.andReturn()
+			.getResponse()
+			.getContentAsByteArray();
+
+		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals(1, ((io.jhdf.api.Group) file.getByPath("/data")).getChildren().size());
+			assertEquals(group.captureGroupId().toString(),
 					file.getByPath("/data/demo_000000").getAttribute("capture_group_id").getData());
 		}
 	}

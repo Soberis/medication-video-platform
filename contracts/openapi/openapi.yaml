@@ -139,6 +139,173 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: downloadHumanDemonstrationHdf5Batch
+      tags:
+        - Human Demonstration HDF5 Export
+      summary: Download approved human demonstrations as HDF5 (Batch POST)
+      description: >-
+        Batch request to download HDF5 episodes for selected CaptureGroups using request body to avoid URI length limits.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                capture_group_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                include_raw_candidates:
+                  type: boolean
+                  default: false
+                tensor_layout:
+                  type: boolean
+                  default: true
+      responses:
+        "200":
+          description: Approved human demonstration HDF5; no MP4 bytes or robot-control data.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Content-Disposition:
+              schema:
+                type: string
+                pattern: '^attachment; filename="human_demonstration_hdf5_v2_(project|event_[a-f0-9]{8}|selection)_[0-9]{8}T[0-9]{6}Z\\.hdf5"$'
+          content:
+            application/x-hdf5:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: No current approved annotation is ready, or current provenance cannot be proven safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/human-demonstrations/hdf5/v2/jobs:
+    post:
+      operationId: createHumanDemonstrationHdf5ExportJob
+      tags:
+        - Human Demonstration HDF5 Export
+      summary: Submit background HDF5 export job
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                capture_group_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                include_raw_candidates:
+                  type: boolean
+                  default: false
+                tensor_layout:
+                  type: boolean
+                  default: true
+      responses:
+        "202":
+          description: Export task accepted and running in background.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hdf5ExportTaskResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /projects/{project_id}/human-demonstrations/hdf5/v2/jobs/{task_id}:
+    get:
+      operationId: getHumanDemonstrationHdf5ExportJob
+      tags:
+        - Human Demonstration HDF5 Export
+      summary: Get background export job progress
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current progress of export job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hdf5ExportTaskResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: cancelHumanDemonstrationHdf5ExportJob
+      tags:
+        - Human Demonstration HDF5 Export
+      summary: Cancel or delete background export job
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Job cancelled and temp files deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /projects/{project_id}/human-demonstrations/hdf5/v2/jobs/{task_id}/download:
+    get:
+      operationId: downloadHumanDemonstrationHdf5JobResult
+      tags:
+        - Human Demonstration HDF5 Export
+      summary: Download completed HDF5 export file
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Completed HDF5 file download.
+          content:
+            application/x-hdf5:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Job is not ready for download.
   /auth/login:
     post:
       operationId: loginPlatformAccount
@@ -7750,3 +7917,45 @@ components:
         created_at:
           type: string
           format: date-time
+    Hdf5ExportTaskResponse:
+      type: object
+      required:
+        - task_id
+        - project_id
+        - status
+        - current
+        - total
+        - percent
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED]
+        current:
+          type: integer
+        total:
+          type: integer
+        percent:
+          type: integer
+        current_label:
+          type: string
+        file_size_bytes:
+          type: integer
+        file_name:
+          type: string
+        download_url:
+          type: string
+        error_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
