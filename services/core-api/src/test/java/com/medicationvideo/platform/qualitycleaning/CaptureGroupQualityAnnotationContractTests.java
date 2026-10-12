@@ -969,16 +969,6 @@ class CaptureGroupQualityAnnotationContractTests {
 						taskId(newGroup)));
 	}
 
-	private void approveRevisionOnly(UUID revisionId, String prefix) throws Exception {
-		this.mockMvc.perform(
-				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revisionId)
-					.header("Authorization", "Bearer " + ADMIN_TOKEN)
-					.header("Idempotency-Key", key(prefix))
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(reviewRequest(revisionId, "APPROVED", null)))
-			.andExpect(status().isCreated());
-	}
-
 	private ResultActions recordGroup(GroupFixture group, String token, String result, String reason,
 			long expectedRevision, String idempotencyKey) throws Exception {
 		return this.mockMvc.perform(

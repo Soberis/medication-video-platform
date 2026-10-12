@@ -19,7 +19,7 @@ export interface ActionCandidate {
   created_at: string
 }
 
-export const TARGET_OBJECT_LABELS: Record<string, string> = {
+const TARGET_OBJECT_LABELS: Record<string, string> = {
   vial: '西林瓶/粉针瓶',
   ampoule: '安瓿瓶',
   syringe: '注射器',

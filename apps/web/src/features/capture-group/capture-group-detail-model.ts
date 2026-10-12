@@ -79,7 +79,7 @@ export function formatSegmentDurationLabel(startMs: number, endMs: number): stri
   return `${formatHumanFriendlyTime(startMs)} ~ ${formatHumanFriendlyTime(endMs)} (${durationSec.toFixed(1)}s)`
 }
 
-export const ACTION_PALETTE: Record<
+const ACTION_PALETTE: Record<
   string,
   { bg: string; border: string; text: string; dot: string; label: string }
 > = {
@@ -499,45 +499,4 @@ export function getCameraProcessingStatus(
     return { status: 'DRAFT', label: '编辑中', tone: 'information', segmentCount: null }
   }
   return { status: 'PENDING', label: '待处理', tone: 'neutral', segmentCount: null }
-}
-
-export function computeGroupCameraSummary(
-  viewRows: GroupViewRow[],
-  task: AnnotationTask | null,
-  cameraDrafts: Record<string, { dirty?: boolean; segments?: unknown[]; exclusionReason?: string }>,
-) {
-  let submitted = 0
-  let excluded = 0
-  let drafting = 0
-  let pending = 0
-
-  for (const row of viewRows) {
-    const meta = getCameraProcessingStatus(
-      row.cameraNumber,
-      task,
-      cameraDrafts[String(row.cameraNumber)],
-    )
-    if (meta.status === 'SUBMITTED') submitted++
-    else if (meta.status === 'EXCLUDED') excluded++
-    else if (meta.status === 'DRAFT') drafting++
-    else pending++
-  }
-
-  const total = viewRows.length
-  return {
-    total,
-    submitted,
-    excluded,
-    drafting,
-    pending,
-    isAllResolved: submitted + excluded === total && submitted > 0 && drafting === 0,
-    displayText: [
-      `已提交 ${submitted} / ${total}`,
-      excluded > 0 ? `已排除 ${excluded} / ${total}` : null,
-      drafting > 0 ? `编辑中 ${drafting} / ${total}` : null,
-      pending > 0 ? `待处理 ${pending} / ${total}` : null,
-    ]
-      .filter(Boolean)
-      .join(' · '),
-  }
 }

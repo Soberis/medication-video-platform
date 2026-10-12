@@ -55,7 +55,49 @@ class ProjectAccessServiceTests {
 
 		assertEquals(ProjectRole.ADMIN, service.requireMember(PROJECT_ID, ACTOR_ID));
 		assertEquals(ProjectRole.ADMIN, service.requireAdministrator(PROJECT_ID, ACTOR_ID));
-		verifyNoInteractions(memberships);
+	}
+
+	@Test
+	void explicitProjectMembershipTakesPrecedenceOverPlatformAdministratorFallback() {
+		var projects = mock(DataProjectRepository.class);
+		var memberships = mock(ProjectMembershipRepository.class);
+		var project = mock(DataProject.class);
+		var memberMembership = mock(ProjectMembership.class);
+		when(memberMembership.isActive()).thenReturn(true);
+		when(memberMembership.getRole()).thenReturn(ProjectRole.MEMBER);
+		when(projects.findByProjectIdAndStatus(PROJECT_ID, ProjectStatus.ACTIVE)).thenReturn(Optional.of(project));
+		when(project.getStatus()).thenReturn(ProjectStatus.ACTIVE);
+		when(memberships.findByProjectIdAndActorId(PROJECT_ID, ACTOR_ID)).thenReturn(Optional.of(memberMembership));
+
+		SecurityContextHolder.getContext()
+			.setAuthentication(new UsernamePasswordAuthenticationToken(ACTOR_ID, null,
+					List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+		var service = new ProjectAccessService(projects, memberships);
+
+		assertEquals(ProjectRole.MEMBER, service.requireMember(PROJECT_ID, ACTOR_ID));
+		var exception = assertThrows(ProjectAccessException.class,
+				() -> service.requireAdministrator(PROJECT_ID, ACTOR_ID));
+		assertEquals("PROJECT_ACCESS_DENIED", exception.getErrorCode());
+	}
+
+	@Test
+	void removedProjectMembershipBlocksAccessEvenForPlatformAdministrator() {
+		var projects = mock(DataProjectRepository.class);
+		var memberships = mock(ProjectMembershipRepository.class);
+		var project = mock(DataProject.class);
+		var removedMembership = mock(ProjectMembership.class);
+		when(removedMembership.isActive()).thenReturn(false);
+		when(projects.findByProjectIdAndStatus(PROJECT_ID, ProjectStatus.ACTIVE)).thenReturn(Optional.of(project));
+		when(project.getStatus()).thenReturn(ProjectStatus.ACTIVE);
+		when(memberships.findByProjectIdAndActorId(PROJECT_ID, ACTOR_ID)).thenReturn(Optional.of(removedMembership));
+
+		SecurityContextHolder.getContext()
+			.setAuthentication(new UsernamePasswordAuthenticationToken(ACTOR_ID, null,
+					List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+		var service = new ProjectAccessService(projects, memberships);
+
+		var exception = assertThrows(ProjectAccessException.class, () -> service.requireMember(PROJECT_ID, ACTOR_ID));
+		assertEquals("PROJECT_NOT_FOUND", exception.getErrorCode());
 	}
 
 	@Test
@@ -86,7 +128,6 @@ class ProjectAccessServiceTests {
 		var service = new ProjectAccessService(projects, memberships, true);
 
 		assertEquals(ProjectRole.ADMIN, service.requireAdministrator(PROJECT_ID, "local-synthetic-uploader"));
-		verifyNoInteractions(memberships);
 	}
 
 }

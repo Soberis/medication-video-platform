@@ -20,7 +20,7 @@ export interface CaptureGroupDetailRefreshOptions {
   focusNextPendingView?: boolean
 }
 
-export const RECEIPT_POLL_INTERVAL_MS = 5_000
+const RECEIPT_POLL_INTERVAL_MS = 5_000
 
 export function useCaptureGroupDetailData(projectId: string, captureGroupId: string) {
   const { message } = AntdApp.useApp()

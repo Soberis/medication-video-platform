@@ -21,7 +21,7 @@ import {
   captureGroupTaskDestination,
 } from '@/features/capture-group-presentation'
 
-export const ANNOTATION_TASK_LIST_POLL_INTERVAL_MS = 20_000
+const ANNOTATION_TASK_LIST_POLL_INTERVAL_MS = 20_000
 
 function taskNoActionLabel(task: AnnotationTask, viewerUsername: string | undefined) {
   if (task.status === 'COMPLETED') return '当前无需操作'

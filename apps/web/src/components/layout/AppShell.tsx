@@ -69,7 +69,7 @@ export interface WorkspaceProps {
   inspector?: ReactNode
 }
 
-export function Workspace({ children, inspector }: WorkspaceProps) {
+function Workspace({ children, inspector }: WorkspaceProps) {
   return (
     <div className="workspace" data-has-inspector={inspector ? true : undefined}>
       <main id="main-content" className="workspace-main" tabIndex={-1}>

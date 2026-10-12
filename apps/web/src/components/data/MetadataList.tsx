@@ -8,7 +8,7 @@ export interface PropertyRowProps {
 }
 
 /** A semantic label/value row for compact workspace metadata collections. */
-export function PropertyRow({ className = '', label, secondary, value }: PropertyRowProps) {
+function PropertyRow({ className = '', label, secondary, value }: PropertyRowProps) {
   return (
     <div className={`property-row ${className}`.trim()}>
       <dt>{label}</dt>

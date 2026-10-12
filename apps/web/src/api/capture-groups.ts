@@ -178,7 +178,7 @@ export function getCaptureGroup(projectId: string, captureGroupId: string, signa
   return readJson<CaptureGroup>(path(projectId, captureGroupId), signal)
 }
 
-export function listCaptureGroups(
+function listCaptureGroups(
   projectId: string,
   cursor: string | null = null,
   signal?: AbortSignal,

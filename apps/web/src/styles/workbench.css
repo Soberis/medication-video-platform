@@ -114,20 +114,10 @@
   border-color: rgba(217, 119, 6, 0.35);
   background: color-mix(in srgb, #0b0f17 92%, #d97706);
 }
-
-.playback-idle-stage.playback-availability-warning .playback-idle-copy strong {
-  color: #fbbf24;
-}
-
 .playback-idle-stage.playback-availability-error {
   border-color: rgba(220, 38, 38, 0.35);
   background: color-mix(in srgb, #0b0f17 92%, #dc2626);
 }
-
-.playback-idle-stage.playback-availability-error .playback-idle-copy strong {
-  color: #f87171;
-}
-
 .workbench-panel {
   display: grid;
   gap: var(--app-space-8);

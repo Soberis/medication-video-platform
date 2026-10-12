@@ -33,10 +33,17 @@ public class ProjectAccessService {
 	@Transactional(readOnly = true)
 	public ProjectRole requireMember(UUID projectId, String actorId) {
 		requireActiveProject(projectId);
+		var membership = this.membershipRepository.findByProjectIdAndActorId(projectId, actorId);
+		if (membership.isPresent()) {
+			if (!membership.get().isActive()) {
+				throw projectNotFound();
+			}
+			return membership.get().getRole();
+		}
 		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
 			return ProjectRole.ADMIN;
 		}
-		return requireActiveMembership(projectId, actorId).getRole();
+		throw projectNotFound();
 	}
 
 	@Transactional(readOnly = true)
@@ -45,24 +52,37 @@ public class ProjectAccessService {
 			requireEnabledPlatformAdministrator();
 		}
 		requireActiveProject(projectId);
+		var membership = this.membershipRepository.findByProjectIdAndActorId(projectId, actorId);
+		if (membership.isPresent()) {
+			if (!membership.get().isActive()) {
+				throw projectNotFound();
+			}
+			if (membership.get().getRole() != ProjectRole.ADMIN) {
+				throw new ProjectAccessException("PROJECT_ACCESS_DENIED",
+						"Project administrator membership is required.", 403);
+			}
+			return membership.get().getRole();
+		}
 		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
 			return ProjectRole.ADMIN;
 		}
-		var membership = requireActiveMembership(projectId, actorId);
-		if (membership.getRole() != ProjectRole.ADMIN) {
-			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "Project administrator membership is required.",
-					403);
-		}
-		return membership.getRole();
+		throw projectNotFound();
 	}
 
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireMember(UUID projectId, String actorId) {
 		lockActiveProjectForSystemProcessing(projectId);
+		var membership = this.membershipRepository.findByProjectIdAndActorId(projectId, actorId);
+		if (membership.isPresent()) {
+			if (!membership.get().isActive()) {
+				throw projectNotFound();
+			}
+			return membership.get().getRole();
+		}
 		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
 			return ProjectRole.ADMIN;
 		}
-		return requireActiveMembership(projectId, actorId).getRole();
+		throw projectNotFound();
 	}
 
 	/**
@@ -88,15 +108,21 @@ public class ProjectAccessService {
 		if (project.getStatus() != ProjectStatus.ACTIVE) {
 			throw projectNotFound();
 		}
+		var membership = this.membershipRepository.findByProjectIdAndActorId(projectId, actorId);
+		if (membership.isPresent()) {
+			if (!membership.get().isActive()) {
+				throw projectNotFound();
+			}
+			if (membership.get().getRole() != ProjectRole.ADMIN) {
+				throw new ProjectAccessException("PROJECT_ACCESS_DENIED",
+						"Project administrator membership is required.", 403);
+			}
+			return membership.get().getRole();
+		}
 		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
 			return ProjectRole.ADMIN;
 		}
-		var membership = requireActiveMembership(projectId, actorId);
-		if (membership.getRole() != ProjectRole.ADMIN) {
-			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "Project administrator membership is required.",
-					403);
-		}
-		return membership.getRole();
+		throw projectNotFound();
 	}
 
 	private void requireActiveProject(UUID projectId) {

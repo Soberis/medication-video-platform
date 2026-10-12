@@ -29,7 +29,7 @@ import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 import { CopyableText } from '@/components/data/CopyableText'
 import { formatTaskStatus } from '@/features/capture-group/capture-group-detail-model'
 
-export const CAPTURE_GROUP_LIST_POLL_INTERVAL_MS = 20_000
+const CAPTURE_GROUP_LIST_POLL_INTERVAL_MS = 20_000
 
 type CaptureGroupListLoadingMode = 'initial' | 'refresh' | null
 

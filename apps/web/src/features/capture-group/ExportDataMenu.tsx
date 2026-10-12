@@ -1,6 +1,6 @@
 import { App as AntdApp, Button, Checkbox, Modal, Table } from 'antd'
-import { Download } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Download, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   AnnotationTaskApiError,
@@ -112,53 +112,73 @@ export function ExportDataMenu({
     selectedExportIds.length > 0 && selectedExportIds.length < exportableIds.length
 
   const [activeJob, setActiveJob] = useState<Hdf5ExportTaskResponse | null>(null)
+  const [floaterOpen, setFloaterOpen] = useState(true)
   const pollTimerRef = useRef<number | null>(null)
 
-  const pollJob = (taskId: string) => {
-    if (pollTimerRef.current) {
-      window.clearTimeout(pollTimerRef.current)
-      pollTimerRef.current = null
-    }
+  const isJobRunning =
+    activeJob != null && (activeJob.status === 'PROCESSING' || activeJob.status === 'PENDING')
 
-    const runPoll = async () => {
-      try {
-        const updated = await getHdf5ExportJob(projectId, taskId)
-        setActiveJob(updated)
-        if (updated.status === 'PROCESSING' || updated.status === 'PENDING') {
-          const nextDelay = updated.percent >= 90 ? 600 : 1500
-          pollTimerRef.current = window.setTimeout(runPoll, nextDelay)
-        } else if (updated.status === 'COMPLETED') {
-          try {
-            sessionStorage.removeItem(`hdf5_export_${projectId}`)
-          } catch {
-            // ignore
-          }
-          void message.success('HDF5 数据集导出完成，已启动下载。')
-          if (updated.download_url) {
-            const link = document.createElement('a')
-            link.href = updated.download_url
-            link.download = updated.file_name || 'human_demonstration_hdf5_v2.hdf5'
-            link.rel = 'noopener'
-            link.hidden = true
-            document.body.append(link)
-            link.click()
-            link.remove()
-          }
-        } else if (updated.status === 'FAILED') {
-          try {
-            sessionStorage.removeItem(`hdf5_export_${projectId}`)
-          } catch {
-            // ignore
-          }
-          void message.error(updated.error_message || '后台导出失败，请稍后重试。')
-        }
-      } catch {
-        pollTimerRef.current = window.setTimeout(runPoll, 2000)
-      }
+  function handleManualDownload() {
+    if (activeJob?.download_url) {
+      const link = document.createElement('a')
+      link.href = activeJob.download_url
+      link.download = activeJob.file_name || 'human_demonstration_hdf5_v2.hdf5'
+      link.rel = 'noopener'
+      link.hidden = true
+      document.body.append(link)
+      link.click()
+      link.remove()
     }
-
-    pollTimerRef.current = window.setTimeout(runPoll, 1200)
   }
+
+  const pollJob = useCallback(
+    (taskId: string) => {
+      if (pollTimerRef.current) {
+        window.clearTimeout(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
+
+      const runPoll = async () => {
+        try {
+          const updated = await getHdf5ExportJob(projectId, taskId)
+          setActiveJob(updated)
+          if (updated.status === 'PROCESSING' || updated.status === 'PENDING') {
+            const nextDelay = updated.percent >= 90 ? 600 : 1500
+            pollTimerRef.current = window.setTimeout(runPoll, nextDelay)
+          } else if (updated.status === 'COMPLETED') {
+            try {
+              sessionStorage.removeItem(`hdf5_export_${projectId}`)
+            } catch {
+              // ignore
+            }
+            void message.success('HDF5 数据集导出完成，已启动下载。')
+            if (updated.download_url) {
+              const link = document.createElement('a')
+              link.href = updated.download_url
+              link.download = updated.file_name || 'human_demonstration_hdf5_v2.hdf5'
+              link.rel = 'noopener'
+              link.hidden = true
+              document.body.append(link)
+              link.click()
+              link.remove()
+            }
+          } else if (updated.status === 'FAILED') {
+            try {
+              sessionStorage.removeItem(`hdf5_export_${projectId}`)
+            } catch {
+              // ignore
+            }
+            void message.error(updated.error_message || '后台导出失败，请稍后重试。')
+          }
+        } catch {
+          pollTimerRef.current = window.setTimeout(runPoll, 2000)
+        }
+      }
+
+      pollTimerRef.current = window.setTimeout(runPoll, 1200)
+    },
+    [message, projectId],
+  )
 
   useEffect(() => {
     // 挂载时尝试从 sessionStorage 恢复当前进行中的导出任务
@@ -171,9 +191,11 @@ export function ExportDataMenu({
             .then((job) => {
               if (job.status === 'PROCESSING' || job.status === 'PENDING') {
                 setActiveJob(job)
+                setFloaterOpen(true)
                 pollJob(job.task_id)
               } else if (job.status === 'COMPLETED') {
                 setActiveJob(job)
+                setFloaterOpen(true)
                 sessionStorage.removeItem(`hdf5_export_${projectId}`)
               } else {
                 sessionStorage.removeItem(`hdf5_export_${projectId}`)
@@ -194,11 +216,12 @@ export function ExportDataMenu({
         pollTimerRef.current = null
       }
     }
-  }, [projectId])
+  }, [projectId, pollJob])
 
   async function startExport() {
     if (loading || readState !== 'success' || !selectedExportIds.length) return
     setOpen(false)
+    setFloaterOpen(true)
     void message.info('已提交后台导出任务，可在右下角浮窗查看进度。')
     setActiveJob({
       task_id: 'pending',
@@ -238,7 +261,19 @@ export function ExportDataMenu({
     }
   }
 
-  async function handleDismissJob() {
+  function handleDismissJob() {
+    setFloaterOpen(false)
+    if (activeJob?.status === 'COMPLETED' || activeJob?.status === 'FAILED') {
+      setActiveJob(null)
+      try {
+        sessionStorage.removeItem(`hdf5_export_${projectId}`)
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  async function handleCancelJob() {
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current)
       pollTimerRef.current = null
@@ -255,11 +290,13 @@ export function ExportDataMenu({
     ) {
       try {
         await cancelHdf5ExportJob(projectId, activeJob.task_id)
+        void message.info('已取消 HDF5 导出任务。')
       } catch {
         // ignore cancellation error
       }
     }
     setActiveJob(null)
+    setFloaterOpen(false)
   }
 
   function toggleRow(captureGroupId: string, checked: boolean) {
@@ -274,13 +311,28 @@ export function ExportDataMenu({
   return (
     <>
       <Button
-        icon={<Download aria-hidden="true" size={16} strokeWidth={1.8} />}
+        icon={
+          isJobRunning ? (
+            <Loader2
+              aria-hidden="true"
+              size={15}
+              style={{ animation: 'spin 1.2s linear infinite', color: '#1677ff' }}
+            />
+          ) : (
+            <Download aria-hidden="true" size={16} strokeWidth={1.8} />
+          )
+        }
         onClick={() => {
-          setOpen(true)
-          void loadCandidates()
+          if (isJobRunning) {
+            setFloaterOpen(true)
+          } else {
+            setOpen(true)
+            void loadCandidates()
+          }
         }}
+        title={isJobRunning ? '点击查看当前导出进度' : undefined}
       >
-        导出数据
+        {isJobRunning ? `导出中 (${activeJob.percent}%)` : '导出数据'}
       </Button>
       <Modal
         open={open}
@@ -434,19 +486,14 @@ export function ExportDataMenu({
           ) : null}
         </section>
       </Modal>
-      <ExportTaskFloater
-        job={activeJob}
-        onDismiss={() => void handleDismissJob()}
-        onManualDownload={() => {
-          if (activeJob?.download_url) {
-            const link = document.createElement('a')
-            link.href = activeJob.download_url
-            link.download = activeJob.file_name || 'human_demonstration_hdf5_v2.hdf5'
-            link.rel = 'noopener'
-            link.click()
-          }
-        }}
-      />
+      {floaterOpen && activeJob ? (
+        <ExportTaskFloater
+          job={activeJob}
+          onDismiss={handleDismissJob}
+          onCancel={handleCancelJob}
+          onManualDownload={handleManualDownload}
+        />
+      ) : null}
     </>
   )
 }

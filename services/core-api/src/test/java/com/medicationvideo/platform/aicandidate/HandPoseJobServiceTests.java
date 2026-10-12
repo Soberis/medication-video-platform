@@ -299,34 +299,6 @@ class HandPoseJobServiceTests {
 			}).when(this.auditRecorder).record(any(AuditEventCommand.class));
 		}
 
-		void prepare(AiCandidateJob job, AiCandidateJobAttempt failedAttempt) {
-			latestAttempt.set(failedAttempt);
-			when(this.access.lockAndRequireMember(PROJECT_ID, "actor")).thenReturn(ProjectRole.MEMBER);
-			when(this.assetCatalog.getClipAssetInputSummary(PROJECT_ID, CLIP_ASSET_ID))
-				.thenReturn(new ClipAssetInputSummary(CLIP_ASSET_ID, PROJECT_ID, "video/mp4", 128, "b".repeat(64),
-						ClipAssetStatus.INGESTED, "OVERVIEW", true, Instant.EPOCH, Instant.EPOCH));
-			when(this.durationQueryService.findLatestVerifiedDurationFact(PROJECT_ID, CLIP_ASSET_ID))
-				.thenReturn(Optional.of(new MediaDurationQueryService.VerifiedDurationFact(UUID.randomUUID(), INPUT_SHA,
-						"c".repeat(64), 1_000_000, Instant.EPOCH)));
-			when(this.repository.findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(PROJECT_ID,
-					CLIP_ASSET_ID, HandPoseProfile.ALGORITHM_KEY))
-				.thenReturn(Optional.of(job));
-			when(this.repository.findById(job.getAiJobId())).thenReturn(Optional.of(job));
-			var receipt = new AtomicReference<AiCandidateJobIdempotencyReceipt>();
-			when(this.receiptRepository.findByProjectIdAndIdempotencyKey(eq(PROJECT_ID), any()))
-				.thenAnswer(invocation -> Optional.ofNullable(receipt.get()));
-			doAnswer(invocation -> {
-				receipt.set(invocation.getArgument(0));
-				return invocation.getArgument(0);
-			}).when(this.receiptRepository).save(any(AiCandidateJobIdempotencyReceipt.class));
-			when(this.attemptRepository.findLatestForUpdate(job.getAiJobId()))
-				.thenAnswer(invocation -> List.of(this.latestAttempt.get()));
-			doAnswer(invocation -> {
-				this.latestAttempt.set(invocation.getArgument(0));
-				return invocation.getArgument(0);
-			}).when(this.attemptRepository).save(any(AiCandidateJobAttempt.class));
-		}
-
 		void prepareReadyForQueue() {
 			prepareReadyForQueue(true);
 		}

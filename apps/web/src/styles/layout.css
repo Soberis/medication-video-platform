@@ -292,17 +292,6 @@
   margin: 0 auto;
   padding: var(--app-space-16) var(--app-space-24) var(--app-space-24);
 }
-
-.workspace-inspector {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow-y: auto;
-  padding: var(--app-space-16);
-  border-left: 1px solid var(--app-color-border-subtle);
-  background: var(--app-color-surface);
-}
-
 @media (min-width: 2400px) {
   .workspace-content {
     width: min(100%, var(--app-workspace-max-width-wide));
@@ -386,10 +375,6 @@
 
   .workspace[data-has-inspector='true'] {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .workspace-inspector {
-    display: none;
   }
 }
 
