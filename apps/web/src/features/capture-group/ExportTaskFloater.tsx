@@ -37,6 +37,9 @@ export function ExportTaskFloater({
   const isCompleted = job.status === 'COMPLETED'
   const isFailed = job.status === 'FAILED'
   const isRunning = job.status === 'PROCESSING' || job.status === 'PENDING'
+  const isSealing =
+    isRunning &&
+    (job.percent >= 100 || (job.total > 0 && job.current >= job.total))
 
   if (minimized) {
     return (
@@ -73,7 +76,9 @@ export function ExportTaskFloater({
         )}
         <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>
           {isRunning
-            ? `HDF5 导出中 (${job.percent}%)`
+            ? isSealing
+              ? 'HDF5 封装写入中...'
+              : `HDF5 导出中 (${job.percent}%)`
             : isCompleted
               ? 'HDF5 导出完成'
               : 'HDF5 导出失败'}
@@ -179,21 +184,28 @@ export function ExportTaskFloater({
                 已打包 {job.current} / {job.total || job.current} 条
               </span>
             </div>
-            {job.current_label && (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: '#475569',
-                  marginTop: 6,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-                title={job.current_label}
-              >
-                当前: {job.current_label}
-              </div>
-            )}
+            <div
+              style={{
+                fontSize: 12,
+                color: isSealing ? '#1677ff' : '#475569',
+                fontWeight: isSealing ? 500 : 400,
+                marginTop: 6,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+              title={
+                isSealing
+                  ? '采样已完成，正在封装写入 HDF5 磁盘文件…'
+                  : job.current_label
+              }
+            >
+              {isSealing
+                ? '当前: 采样已完成，正在封包写入磁盘…'
+                : job.current_label
+                  ? `当前: ${job.current_label}`
+                  : null}
+            </div>
             <div
               style={{
                 fontSize: 12,
@@ -202,7 +214,7 @@ export function ExportTaskFloater({
                 lineHeight: 1.4,
               }}
             >
-              提示：后台处理中，您可以继续正常浏览视频或执行其他操作。
+              后台处理中，可继续进行其他操作。
             </div>
           </>
         )}
@@ -211,7 +223,7 @@ export function ExportTaskFloater({
           <div>
             <div style={{ fontSize: 13, color: '#334155', marginBottom: 12 }}>
               已就绪：
-              <span style={{ fontWeight: 500 }}>
+              <span style={{ fontWeight: 600, color: '#0f172a' }}>
                 {job.file_name || 'human_demonstration_hdf5_v2.hdf5'}
               </span>
               {job.file_size_bytes ? ` (${formatBytes(job.file_size_bytes)})` : ''}
@@ -224,7 +236,7 @@ export function ExportTaskFloater({
                   onClick={onManualDownload}
                   style={{ flex: 1 }}
                 >
-                  再次下载
+                  下载文件
                 </Button>
               )}
               <Button onClick={onDismiss} style={{ flex: 1 }}>
