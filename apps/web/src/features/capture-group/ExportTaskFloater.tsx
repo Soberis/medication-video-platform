@@ -170,8 +170,6 @@ export function ExportTaskFloater({
             />
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
                 fontSize: 12,
                 color: '#64748b',
                 marginTop: 8,
@@ -180,7 +178,6 @@ export function ExportTaskFloater({
               <span>
                 已打包 {job.current} / {job.total || job.current} 条
               </span>
-              <span>{job.percent}%</span>
             </div>
             {job.current_label && (
               <div
