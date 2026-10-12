@@ -254,10 +254,11 @@ public class ApprovedCaptureGroupAnnotationQueryService {
 				|| candidateIds.stream().distinct().count() != candidateIds.size()) {
 			throw notEligible();
 		}
+		long toleranceMs = 50L;
 		for (var candidateId : candidateIds) {
 			var source = sources.get(candidateId);
-			if (source == null || !Objects.equals(source.label(), label) || source.startMs() < start
-					|| source.endMs() > end) {
+			if (source == null || !Objects.equals(source.label(), label) || source.startMs() < start - toleranceMs
+					|| source.endMs() > end + toleranceMs) {
 				throw notEligible();
 			}
 		}

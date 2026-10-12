@@ -1,22 +1,22 @@
 package com.medicationvideo.platform.annotationreview;
 
-class AnnotationTaskException extends RuntimeException {
+public class AnnotationTaskException extends RuntimeException {
 
 	private final String errorCode;
 
 	private final int statusCode;
 
-	AnnotationTaskException(String errorCode, String message, int statusCode) {
+	public AnnotationTaskException(String errorCode, String message, int statusCode) {
 		super(message);
 		this.errorCode = errorCode;
 		this.statusCode = statusCode;
 	}
 
-	String getErrorCode() {
+	public String getErrorCode() {
 		return this.errorCode;
 	}
 
-	int getStatusCode() {
+	public int getStatusCode() {
 		return this.statusCode;
 	}
 

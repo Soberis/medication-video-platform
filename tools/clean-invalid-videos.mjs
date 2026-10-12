@@ -189,11 +189,28 @@ SELECT
   mp.hand_result as mp_hand_result,
   qw.status as qw_status,
   (SELECT count(*) FROM action_candidate ac WHERE ac.capture_group_id = cs.capture_session_id) as action_candidate_count,
+  EXISTS (
+    SELECT 1 FROM candidate_annotation ca
+    JOIN action_candidate ac ON ac.capture_group_id = cs.capture_session_id
+    WHERE ca.ai_job_id = mp.ai_job_id
+      AND ca.frame_timestamp_ms >= ac.start_ms
+      AND ca.frame_timestamp_ms <= ac.end_ms
+  ) as has_hands_in_action,
   CASE
     WHEN mp.hand_result = 'NO_HAND_DETECTED' THEN 'NO_HAND'
     WHEN mp.status = 'FAILED' OR qw.status = 'FAILED' THEN 'FAILED'
     WHEN mp.status IN ('QUEUED', 'RUNNING') OR qw.status IN ('QUEUED', 'RUNNING') THEN 'PROCESSING'
-    WHEN mp.hand_result = 'HAND_DETECTED' AND (SELECT count(*) FROM action_candidate ac WHERE ac.capture_group_id = cs.capture_session_id) > 0 THEN 'READY'
+    WHEN mp.hand_result = 'HAND_DETECTED' 
+         AND (SELECT count(*) FROM action_candidate ac WHERE ac.capture_group_id = cs.capture_session_id) > 0
+         AND EXISTS (
+           SELECT 1 FROM candidate_annotation ca
+           JOIN action_candidate ac ON ac.capture_group_id = cs.capture_session_id
+           WHERE ca.ai_job_id = mp.ai_job_id
+             AND ca.frame_timestamp_ms >= ac.start_ms
+             AND ca.frame_timestamp_ms <= ac.end_ms
+         ) THEN 'READY'
+    WHEN mp.hand_result = 'HAND_DETECTED' 
+         AND (SELECT count(*) FROM action_candidate ac WHERE ac.capture_group_id = cs.capture_session_id) > 0 THEN 'NO_HAND'
     WHEN mp.hand_result = 'HAND_DETECTED' THEN 'NO_ACTION'
     ELSE 'PENDING'
   END as pipeline_status

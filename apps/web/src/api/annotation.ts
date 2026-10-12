@@ -498,13 +498,31 @@ export async function downloadHumanDemonstrationHdf5(
 
 async function annotationTaskApiError(response: Response): Promise<AnnotationTaskApiError> {
   let errorCode = 'ANNOTATION_TASK_REQUEST_FAILED'
+  let customMessage: string | undefined
   try {
-    const body = (await response.json()) as { error_code?: unknown }
-    if (typeof body.error_code === 'string') errorCode = body.error_code
+    const text = await response.text()
+    try {
+      const body = JSON.parse(text) as {
+        error_code?: unknown
+        error_message?: unknown
+        message?: unknown
+      }
+      if (typeof body.error_code === 'string') errorCode = body.error_code
+      if (typeof body.error_message === 'string') customMessage = body.error_message
+      else if (typeof body.message === 'string') customMessage = body.message
+    } catch {
+      if (response.status === 400) {
+        customMessage = '请求参数过大或无效 (HTTP 400)，请重试。'
+      } else if (response.status >= 500) {
+        customMessage = `服务处理异常 (HTTP ${response.status})，请稍后重试。`
+      }
+    }
   } catch {
     // Keep the stable fallback for proxy and non-JSON failures.
   }
   const messages: Record<string, string> = {
+    APPROVED_CAPTURE_GROUP_ANNOTATION_NOT_ELIGIBLE:
+      '选中的采集记录中存在不满足导出条件的标注，请刷新后重试。',
     ANNOTATION_CANDIDATE_SOURCE_INVALID:
       'AI 候选来源与当前机位或标签规范不一致，请刷新候选后重试。',
     ANNOTATION_CANDIDATE_SOURCE_UNAVAILABLE: '暂时无法核验 AI 候选来源，请稍后重试。',
@@ -556,7 +574,7 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }
   return new AnnotationTaskApiError(
-    messages[errorCode] ?? '标注操作未完成，请稍后重试。',
+    customMessage ?? messages[errorCode] ?? '标注操作未完成，请稍后重试。',
     errorCode,
   )
 }

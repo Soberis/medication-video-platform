@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.medicationvideo.platform.annotationreview.AnnotationTaskException;
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
@@ -30,6 +31,12 @@ class TrainingDataExportExceptionHandler {
 	@ExceptionHandler(AssetCatalogQueryException.class)
 	ResponseEntity<TrainingDataExportErrorResponse> captureGroup(AssetCatalogQueryException exception) {
 		return error(HttpStatus.NOT_FOUND, exception.getErrorCode(), exception.getMessage(), false);
+	}
+
+	@ExceptionHandler(AnnotationTaskException.class)
+	ResponseEntity<TrainingDataExportErrorResponse> annotationTask(AnnotationTaskException exception) {
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
+				false);
 	}
 
 	private static ResponseEntity<TrainingDataExportErrorResponse> error(HttpStatus status, String errorCode,
