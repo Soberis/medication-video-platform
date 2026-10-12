@@ -153,6 +153,22 @@ export default defineConfig(async ({ mode }) => {
             }
           })
 
+          server.middlewares.use('/api/dev/reawaken-capture-group', async (req: Connect.IncomingMessage, res: ServerResponse) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.end()
+              return
+            }
+            try {
+              const { captureGroupId, projectId } = await readJson<{ captureGroupId: string; projectId?: string }>(req)
+              const { reawakenCaptureGroup } = await import(/* @vite-ignore */ toolModule)
+              const result = await reawakenCaptureGroup(captureGroupId, projectId)
+              sendJson(res, result)
+            } catch (err) {
+              sendJson(res, { ok: false, error: String(err) }, 500)
+            }
+          })
+
           server.middlewares.use('/api/dev/retry-hand-pose', async (req: Connect.IncomingMessage, res: ServerResponse) => {
             if (req.method !== 'POST') {
               res.statusCode = 405

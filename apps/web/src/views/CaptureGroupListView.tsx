@@ -441,7 +441,6 @@ export default function CaptureGroupListView() {
     const readyCount = pipelineData.stats?.ready
     const processingCount = pipelineData.stats?.processing
     const invalidCount = pipelineData.stats?.invalid
-    const exportableCount = taskReadState.status === 'success' ? exportableRows.length : null
 
     return [
       {
@@ -524,13 +523,13 @@ export default function CaptureGroupListView() {
     ]
   }, [
     activeView,
-    exportableRows.length,
     isTaskView,
     pipelineData.stats?.invalid,
+    pipelineData.stats?.noAction,
+    pipelineData.stats?.noHand,
     pipelineData.stats?.processing,
     pipelineData.stats?.ready,
     rows.length,
-    taskReadState.status,
   ])
 
   return (

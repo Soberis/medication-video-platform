@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   AnnotationTaskApiError,
+  cancelHdf5ExportJob,
+  createHdf5ExportJob,
+  getHdf5ExportJob,
   listAnnotationTasks,
+  type Hdf5ExportTaskResponse,
 } from '@/api/annotation'
 import {
   listAllCaptureGroupSummaries,
@@ -12,7 +16,7 @@ import {
   type CaptureGroupSummary,
 } from '@/api/capture-groups'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { triggerHdf5Download } from '@/features/capture-group/export-hdf5'
+import { ExportTaskFloater } from '@/features/capture-group/ExportTaskFloater'
 import { isHumanAnnotationExportReady } from '@/features/capture-group-presentation'
 import { formatDateTime, parseAssetIdentity, shortId } from '@/features/catalog/catalog-presentation'
 
@@ -25,7 +29,7 @@ export function ExportDataMenu({
 }) {
   const { message } = AntdApp.useApp()
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const loading = false
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [rows, setRows] = useState<CaptureGroupSummary[]>([])
   const [readState, setReadState] = useState<'loading' | 'success' | 'error'>('loading')
@@ -80,22 +84,24 @@ export function ExportDataMenu({
     setOpen(false)
   }
 
-  const isRowExportable = (row: CaptureGroupSummary) => {
-    const item = pipelineItems[row.capture_group_id]
-    if (!item) return true
-    if (
-      item.pipeline_status === 'NO_HAND' ||
-      item.pipeline_status === 'FAILED' ||
-      item.pipeline_status === 'NO_ACTION' ||
-      item.mp_hand_result === 'NO_HAND_DETECTED'
-    ) {
-      return false
-    }
-    return true
-  }
-
   // 严格过滤：仅收录已核准且已检出双手骨骼的真正可导出数据
-  const exportableRows = useMemo(() => rows.filter(isRowExportable), [rows, pipelineItems])
+  const exportableRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        const item = pipelineItems[row.capture_group_id]
+        if (!item) return true
+        if (
+          item.pipeline_status === 'NO_HAND' ||
+          item.pipeline_status === 'FAILED' ||
+          item.pipeline_status === 'NO_ACTION' ||
+          item.mp_hand_result === 'NO_HAND_DETECTED'
+        ) {
+          return false
+        }
+        return true
+      }),
+    [rows, pipelineItems],
+  )
   const exportableIds = useMemo(() => exportableRows.map((row) => row.capture_group_id), [exportableRows])
   const selectedExportIds = useMemo(
     () => exportableIds.filter((id) => selectedIds.has(id)),
@@ -105,22 +111,90 @@ export function ExportDataMenu({
   const indeterminate =
     selectedExportIds.length > 0 && selectedExportIds.length < exportableIds.length
 
-  async function download() {
-    if (loading || readState !== 'success' || !selectedExportIds.length) return
-    setLoading(true)
-    try {
-      const fileName = await triggerHdf5Download(projectId, selectedExportIds)
-      setOpen(false)
-      void message.success(`已开始下载 ${fileName}。`)
-    } catch (error) {
-      void message.error(
-        error instanceof AnnotationTaskApiError
-          ? error.message
-          : 'HDF5 演示数据暂时无法导出，请稍后重试。',
-      )
-    } finally {
-      setLoading(false)
+  const [activeJob, setActiveJob] = useState<Hdf5ExportTaskResponse | null>(null)
+  const pollTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        window.clearTimeout(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
     }
+  }, [])
+
+  async function startExport() {
+    if (loading || readState !== 'success' || !selectedExportIds.length) return
+    setOpen(false)
+    void message.info('已提交后台导出任务，可在右下角浮窗查看进度。')
+    setActiveJob({
+      task_id: 'pending',
+      project_id: projectId,
+      status: 'PROCESSING',
+      current: 0,
+      total: selectedExportIds.length,
+      percent: 0,
+      current_label: '正在初始化任务...',
+      created_at: new Date().toISOString(),
+    })
+
+    try {
+      const initialJob = await createHdf5ExportJob(projectId, selectedExportIds)
+      setActiveJob(initialJob)
+
+      const poll = async () => {
+        try {
+          const updated = await getHdf5ExportJob(projectId, initialJob.task_id)
+          setActiveJob(updated)
+          if (updated.status === 'PROCESSING' || updated.status === 'PENDING') {
+            pollTimerRef.current = window.setTimeout(poll, 1500)
+          } else if (updated.status === 'COMPLETED') {
+            void message.success('HDF5 数据集导出完成，已启动下载。')
+            if (updated.download_url) {
+              const link = document.createElement('a')
+              link.href = updated.download_url
+              link.download = updated.file_name || 'human_demonstration_hdf5_v2.hdf5'
+              link.rel = 'noopener'
+              link.hidden = true
+              document.body.append(link)
+              link.click()
+              link.remove()
+            }
+          } else if (updated.status === 'FAILED') {
+            void message.error(updated.error_message || '后台导出失败，请稍后重试。')
+          }
+        } catch {
+          pollTimerRef.current = window.setTimeout(poll, 3000)
+        }
+      }
+      pollTimerRef.current = window.setTimeout(poll, 1500)
+    } catch (err) {
+      setActiveJob(null)
+      void message.error(
+        err instanceof AnnotationTaskApiError
+          ? err.message
+          : '提交后台导出任务失败，请稍后重试。',
+      )
+    }
+  }
+
+  async function handleDismissJob() {
+    if (pollTimerRef.current) {
+      window.clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+    if (
+      activeJob &&
+      (activeJob.status === 'PROCESSING' || activeJob.status === 'PENDING') &&
+      activeJob.task_id !== 'pending'
+    ) {
+      try {
+        await cancelHdf5ExportJob(projectId, activeJob.task_id)
+      } catch {
+        // ignore cancellation error
+      }
+    }
+    setActiveJob(null)
   }
 
   function toggleRow(captureGroupId: string, checked: boolean) {
@@ -178,7 +252,7 @@ export function ExportDataMenu({
                 aria-busy={loading}
                 disabled={loading || readState !== 'success' || !selectedExportIds.length}
                 loading={loading}
-                onClick={() => void download()}
+                onClick={() => void startExport()}
               >
                 下载 HDF5
               </Button>
@@ -295,6 +369,19 @@ export function ExportDataMenu({
           ) : null}
         </section>
       </Modal>
+      <ExportTaskFloater
+        job={activeJob}
+        onDismiss={() => void handleDismissJob()}
+        onManualDownload={() => {
+          if (activeJob?.download_url) {
+            const link = document.createElement('a')
+            link.href = activeJob.download_url
+            link.download = activeJob.file_name || 'human_demonstration_hdf5_v2.hdf5'
+            link.rel = 'noopener'
+            link.click()
+          }
+        }}
+      />
     </>
   )
 }

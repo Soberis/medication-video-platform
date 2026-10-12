@@ -469,30 +469,159 @@ export async function reopenAnnotationTask(
   throw await annotationTaskApiError(response)
 }
 
-export async function downloadHumanDemonstrationHdf5(
+export interface Hdf5ExportTaskResponse {
+  task_id: string
+  project_id: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+  current: number
+  total: number
+  percent: number
+  current_label?: string
+  file_size_bytes?: number
+  file_name?: string
+  download_url?: string
+  error_message?: string
+  created_at: string
+  completed_at?: string
+}
+
+export async function createHdf5ExportJob(
   projectId: string,
   captureGroupIds?: string[],
   signal?: AbortSignal,
-): Promise<{ blob: Blob; fileName: string }> {
-  const query = new URLSearchParams()
-  for (const captureGroupId of captureGroupIds ?? [])
-    query.append('capture_group_id', captureGroupId)
-  const querySuffix = query.size ? `?${query}` : ''
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v2/download${querySuffix}`,
-    {
-      method: 'GET',
-      headers: { Accept: 'application/x-hdf5' },
-      cache: 'no-store',
-      signal,
+): Promise<Hdf5ExportTaskResponse> {
+  const url = `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v2/jobs`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...csrfHeaders(),
     },
-  )
+    body: JSON.stringify({
+      capture_group_ids: captureGroupIds && captureGroupIds.length > 0 ? captureGroupIds : undefined,
+      include_raw_candidates: false,
+      tensor_layout: true,
+    }),
+    cache: 'no-store',
+    signal,
+  })
+  if (!response.ok) throw await annotationTaskApiError(response)
+  return (await response.json()) as Hdf5ExportTaskResponse
+}
+
+export async function getHdf5ExportJob(
+  projectId: string,
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<Hdf5ExportTaskResponse> {
+  const url = `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v2/jobs/${encodeURIComponent(taskId)}`
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+    signal,
+  })
+  if (!response.ok) throw await annotationTaskApiError(response)
+  return (await response.json()) as Hdf5ExportTaskResponse
+}
+
+export async function cancelHdf5ExportJob(
+  projectId: string,
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const url = `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v2/jobs/${encodeURIComponent(taskId)}`
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { ...csrfHeaders() },
+    cache: 'no-store',
+    signal,
+  })
+  if (!response.ok && response.status !== 404) throw await annotationTaskApiError(response)
+}
+
+export async function downloadHdf5JobResult(
+  downloadUrl: string,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await fetch(downloadUrl, {
+    method: 'GET',
+    headers: { Accept: 'application/x-hdf5' },
+    cache: 'no-store',
+    signal,
+  })
   if (!response.ok) throw await annotationTaskApiError(response)
   return {
     blob: await response.blob(),
     fileName:
       response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ??
-      `human_demonstration_hdf5_v2_${captureGroupIds?.length ? 'selection' : 'project'}.hdf5`,
+      'human_demonstration_hdf5_v2.hdf5',
+  }
+}
+
+export async function downloadHumanDemonstrationHdf5(
+  projectId: string,
+  captureGroupIds?: string[],
+  signal?: AbortSignal,
+  onProgress?: (task: Hdf5ExportTaskResponse) => void,
+): Promise<{ blob: Blob; fileName: string }> {
+  if (onProgress) {
+    const job = await createHdf5ExportJob(projectId, captureGroupIds, signal)
+    onProgress(job)
+    let currentJob = job
+    while (currentJob.status === 'PROCESSING' || currentJob.status === 'PENDING') {
+      await new Promise((r) => setTimeout(r, 1500))
+      if (signal?.aborted) throw new Error('Export cancelled')
+      currentJob = await getHdf5ExportJob(projectId, job.task_id, signal)
+      onProgress(currentJob)
+    }
+    if (currentJob.status === 'FAILED') {
+      throw new AnnotationTaskApiError(
+        currentJob.error_message || '导出处理失败，请稍后重试。',
+        'HDF5_EXPORT_FAILED',
+      )
+    }
+    if (currentJob.status === 'COMPLETED' && currentJob.download_url) {
+      return await downloadHdf5JobResult(currentJob.download_url, signal)
+    }
+    throw new AnnotationTaskApiError('导出任务状态异常。', 'HDF5_EXPORT_FAILED')
+  }
+
+  const isMultiple = Boolean(captureGroupIds && captureGroupIds.length > 1)
+  const isSingle = Boolean(captureGroupIds && captureGroupIds.length === 1)
+  let url = `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v2/download`
+  if (isSingle && captureGroupIds) {
+    url = `${url}?capture_group_id=${encodeURIComponent(captureGroupIds[0]!)}`
+  }
+  const response = isMultiple
+    ? await fetch(url, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/x-hdf5',
+          'Content-Type': 'application/json',
+          ...csrfHeaders(),
+        },
+        body: JSON.stringify({
+          capture_group_ids: captureGroupIds,
+          include_raw_candidates: false,
+          tensor_layout: true,
+        }),
+        cache: 'no-store',
+        signal,
+      })
+    : await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/x-hdf5' },
+        cache: 'no-store',
+        signal,
+      })
+  if (!response.ok) throw await annotationTaskApiError(response)
+  return {
+    blob: await response.blob(),
+    fileName:
+      response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ??
+      `human_demonstration_hdf5_v2_${isSingle || isMultiple ? 'selection' : 'project'}.hdf5`,
   }
 }
 
@@ -513,6 +642,12 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     } catch {
       if (response.status === 400) {
         customMessage = '请求参数过大或无效 (HTTP 400)，请重试。'
+      } else if (response.status === 414) {
+        customMessage = '请求链接过长 (HTTP 414)，请减少单次选择数量。'
+      } else if (response.status === 431) {
+        customMessage = '请求参数超出限制 (HTTP 431)，请减少单次选择数量或分批导出。'
+      } else if (response.status === 403) {
+        customMessage = '当前账号没有执行此操作的权限 (HTTP 403)。'
       } else if (response.status >= 500) {
         customMessage = `服务处理异常 (HTTP ${response.status})，请稍后重试。`
       }
@@ -523,6 +658,9 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
   const messages: Record<string, string> = {
     APPROVED_CAPTURE_GROUP_ANNOTATION_NOT_ELIGIBLE:
       '选中的采集记录中存在不满足导出条件的标注，请刷新后重试。',
+    ANNOTATION_TASK_REQUEST_FAILED: '请求处理失败，请稍后重试。',
+    FORBIDDEN: '当前账号没有执行此操作的权限。',
+    UNAUTHENTICATED: '登录状态已失效，请重新登录。',
     ANNOTATION_CANDIDATE_SOURCE_INVALID:
       'AI 候选来源与当前机位或标签规范不一致，请刷新候选后重试。',
     ANNOTATION_CANDIDATE_SOURCE_UNAVAILABLE: '暂时无法核验 AI 候选来源，请稍后重试。',
@@ -574,7 +712,7 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }
   return new AnnotationTaskApiError(
-    customMessage ?? messages[errorCode] ?? '标注操作未完成，请稍后重试。',
+    customMessage ?? messages[errorCode] ?? '请求操作未完成，请稍后重试。',
     errorCode,
   )
 }

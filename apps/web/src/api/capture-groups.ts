@@ -271,6 +271,7 @@ export interface CaptureGroupPipelineStats {
   processing: number
   invalid: number
   noHand: number
+  noAction?: number
   failed: number
   pending: number
 }

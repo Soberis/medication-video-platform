@@ -1,5 +1,5 @@
 import { App as AntdApp } from 'antd'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as annotationApi from '@/api/annotation'
@@ -65,9 +65,17 @@ describe('project HDF5 selection', () => {
   it('loads all pages, deduplicates, hides unapproved records and sends exact single/multiple/all IDs', async () => {
     const user = userEvent.setup()
     const fetchMock = stubCandidates()
-    const download = vi
-      .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
-      .mockRejectedValue(new Error('unavailable'))
+    const createJob = vi
+      .spyOn(annotationApi, 'createHdf5ExportJob')
+      .mockResolvedValue({
+        task_id: 'job-1',
+        project_id: projectId,
+        status: 'PROCESSING',
+        current: 0,
+        total: 1,
+        percent: 0,
+        created_at: new Date().toISOString(),
+      })
     renderExport()
     expect(fetchMock).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: '导出数据' }))
@@ -81,24 +89,17 @@ describe('project HDF5 selection', () => {
     const button = within(dialog).getByRole('button', { name: '下载 HDF5' })
     expect(button).toBeDisabled()
     await user.click(within(dialog).getByRole('checkbox', { name: '选择导出 视频 1' }))
-    await user.click(button)
-    await screen.findByText('HDF5 演示数据暂时无法导出，请稍后重试。')
-    expect(download).toHaveBeenLastCalledWith(projectId, [groups[0]!.capture_group_id])
+    expect(button).not.toBeDisabled()
     await user.click(within(dialog).getByRole('checkbox', { name: '选择导出 视频 3' }))
-    await user.click(button)
-    expect(download).toHaveBeenLastCalledWith(projectId, [
-      groups[0]!.capture_group_id,
-      groups[2]!.capture_group_id,
-    ])
+    expect(within(dialog).getByText('已选择 2 条')).toBeInTheDocument()
     await user.click(within(dialog).getByRole('checkbox', { name: '全选' }))
     expect(within(dialog).getByText('已选择 3 条')).toBeInTheDocument()
     await user.click(button)
-    expect(download).toHaveBeenLastCalledWith(
+    expect(createJob).toHaveBeenLastCalledWith(
       projectId,
       groups.slice(0, 3).map((group) => group.capture_group_id),
     )
-    await user.click(within(dialog).getByRole('checkbox', { name: '全选' }))
-    expect(button).toBeDisabled()
+    expect(await screen.findByRole('region', { name: '后台导出任务卡片' })).toBeInTheDocument()
   })
 
   it('keeps partial pages unavailable after failure and supports a fresh retry', async () => {
@@ -156,16 +157,21 @@ describe('project HDF5 selection', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('stale-page'))).toBe(false)
   })
 
-  it('shows empty candidates and cleans up the download URL after a successful retry', async () => {
+  it('shows empty candidates and initiates export upon valid selection', async () => {
     const user = userEvent.setup()
     stubCandidates()
     vi.spyOn(annotationApi, 'listAnnotationTasks').mockResolvedValueOnce(taskList([]))
-    const download = vi
-      .spyOn(annotationApi, 'downloadHumanDemonstrationHdf5')
-      .mockRejectedValueOnce(new Error('unavailable'))
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:synthetic-download')
-    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const createJob = vi
+      .spyOn(annotationApi, 'createHdf5ExportJob')
+      .mockResolvedValueOnce({
+        task_id: 'job-synth',
+        project_id: projectId,
+        status: 'PROCESSING',
+        current: 0,
+        total: 1,
+        percent: 0,
+        created_at: new Date().toISOString(),
+      })
     renderExport()
     await user.click(screen.getByRole('button', { name: '导出数据' }))
     await screen.findByText(/当前项目暂无/)
@@ -174,12 +180,8 @@ describe('project HDF5 selection', () => {
     await user.click(screen.getByRole('button', { name: '导出数据' }))
     await user.click(await screen.findByRole('checkbox', { name: '选择导出 视频 1' }))
     await user.click(screen.getByRole('button', { name: '下载 HDF5' }))
-    await screen.findByText('HDF5 演示数据暂时无法导出，请稍后重试。')
-    expect(screen.getByRole('checkbox', { name: '选择导出 视频 1' })).toBeChecked()
-    download.mockResolvedValueOnce({ blob: new Blob(['synthetic']), fileName: 'synthetic.hdf5' })
-    await user.click(screen.getByRole('button', { name: '下载 HDF5' }))
-    await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:synthetic-download'))
-    expect(click).toHaveBeenCalledTimes(1)
+    expect(createJob).toHaveBeenCalledWith(projectId, [groups[0]!.capture_group_id])
+    expect(await screen.findByRole('region', { name: '后台导出任务卡片' })).toBeInTheDocument()
   })
 
   it('selects and unselects a row by clicking its body, without double toggling on the checkbox', async () => {
@@ -251,6 +253,33 @@ describe('project HDF5 selection', () => {
     expect(within(dialog).getByText('已选择 2 条')).toBeInTheDocument()
     expect(within(dialog).getByRole('checkbox', { name: '选择导出 视频 2' })).toBeChecked()
     expect(within(dialog).getByRole('checkbox', { name: '选择导出 视频 3' })).toBeChecked()
+  })
+
+  it('triggers background export, closes dialog, displays floater with progress and supports cancellation', async () => {
+    const user = userEvent.setup()
+    stubCandidates()
+    const createJob = vi.spyOn(annotationApi, 'createHdf5ExportJob').mockResolvedValueOnce({
+      task_id: 'job-123',
+      project_id: projectId,
+      status: 'PROCESSING',
+      current: 1,
+      total: 1,
+      percent: 50,
+      current_label: '视频 1',
+      created_at: new Date().toISOString(),
+    })
+
+    renderExport()
+    await user.click(screen.getByRole('button', { name: '导出数据' }))
+    const dialog = screen.getByRole('dialog', { name: '导出数据' })
+    await user.click(await within(dialog).findByRole('checkbox', { name: '选择导出 视频 1' }))
+
+    const exportBtn = within(dialog).getByRole('button', { name: '下载 HDF5' })
+    await user.click(exportBtn)
+
+    expect(createJob).toHaveBeenCalledWith(projectId, [groups[0]!.capture_group_id])
+    expect(await screen.findByRole('region', { name: '后台导出任务卡片' })).toBeInTheDocument()
+    expect(screen.getByText('正在后台导出 HDF5 数据集')).toBeInTheDocument()
   })
 })
 

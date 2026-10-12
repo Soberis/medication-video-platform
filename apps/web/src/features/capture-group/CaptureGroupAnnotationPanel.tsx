@@ -205,6 +205,7 @@ export function CaptureGroupAnnotationPanel({
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
   const isSubmittingRevisionRef = useRef(false)
   const [isRetryingAction, setIsRetryingAction] = useState(false)
+  const [isReawakening, setIsReawakening] = useState(false)
   const [inputVersionConflict, setInputVersionConflict] = useState(false)
   const [isRefreshingTask, setIsRefreshingTask] = useState(false)
 
@@ -218,6 +219,28 @@ export function CaptureGroupAnnotationPanel({
       void message.error(err instanceof Error ? err.message : '重试动作分析失败，请重试。')
     } finally {
       setIsRetryingAction(false)
+    }
+  }
+
+  async function handleReawakenAnalysis() {
+    setIsReawakening(true)
+    try {
+      const res = await fetch('/api/dev/reawaken-capture-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ captureGroupId, projectId }),
+      })
+      const result = await res.json()
+      if (result.ok) {
+        await onRefresh()
+        void message.success('已重新唤醒分析任务，正在后台执行媒体探针与 AI 分析…')
+      } else {
+        void message.warning(result.error ?? '唤醒请求未能成功调度')
+      }
+    } catch {
+      void message.error('唤醒请求失败，请检查服务连接')
+    } finally {
+      setIsReawakening(false)
     }
   }
   const [actionCandidates, setActionCandidates] = useState<ActionCandidate[]>([])
@@ -1134,14 +1157,24 @@ export function CaptureGroupAnnotationPanel({
                 <StatusBadge tone={aiStatus.tone}>{aiStatus.label}</StatusBadge>
               </span>
             </Tooltip>
-            {currentActionJob?.status === 'FAILED' && canPrepareTask && (
-              <Button
-                size="small"
-                loading={isRetryingAction}
-                onClick={() => void handleRetryActionJob()}
-              >
-                重试动作分析
-              </Button>
+            {canPrepareTask && (
+              currentActionJob?.status === 'FAILED' ? (
+                <Button
+                  size="small"
+                  loading={isRetryingAction}
+                  onClick={() => void handleRetryActionJob()}
+                >
+                  重试动作分析
+                </Button>
+              ) : (!currentActionJob || aiStatus.label === '等待 AI 自动分析') ? (
+                <Button
+                  size="small"
+                  loading={isReawakening}
+                  onClick={() => void handleReawakenAnalysis()}
+                >
+                  唤醒 AI 分析
+                </Button>
+              ) : null
             )}
           </div>
         </div>

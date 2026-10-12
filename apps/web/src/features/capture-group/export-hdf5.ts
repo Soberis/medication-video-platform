@@ -2,7 +2,7 @@ import { downloadHumanDemonstrationHdf5 } from '@/api/annotation'
 
 export async function triggerHdf5Download(
   projectId: string,
-  captureGroupIds: string[],
+  captureGroupIds?: string[],
   signal?: AbortSignal,
 ): Promise<string> {
   const { blob, fileName } = signal
