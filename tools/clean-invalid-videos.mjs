@@ -12,6 +12,7 @@
  *   node tools/clean-invalid-videos.mjs --delete-failed
  */
 
+import { randomUUID } from 'node:crypto'
 import { runPsql, runPsqlJson } from './lib/db.mjs'
 
 export function deleteCaptureGroup(sessionIdOrKey) {
@@ -347,6 +348,73 @@ LIMIT ${limit};
     } catch {}
   }
   return { ok: true, retriedCount: count }
+}
+
+export async function reawakenCaptureGroup(sessionIdOrKey, projectId = '944a19eb-03b1-4b55-98fb-f8e108e23d92') {
+  const lookupRaw = runPsqlJson(`
+    SELECT cs.capture_session_id, cs.capture_group_key, cs.project_id, s.clip_asset_id, ca.asset_status,
+           (SELECT count(*) FROM media_report mr WHERE mr.clip_asset_id = s.clip_asset_id) as report_count
+    FROM capture_session cs
+    JOIN camera_stream s ON cs.capture_session_id = s.capture_session_id
+    LEFT JOIN clip_asset ca ON s.clip_asset_id = ca.clip_asset_id
+    WHERE cs.capture_session_id::text = '${sessionIdOrKey}' OR cs.capture_group_key = '${sessionIdOrKey}'
+    LIMIT 1;
+  `)
+  if (!lookupRaw || !lookupRaw.length) {
+    return { ok: false, error: '未找到该采集记录' }
+  }
+
+  const lookup = lookupRaw[0]
+  const clipAssetId = lookup.clip_asset_id
+  const captureSessionId = lookup.capture_session_id
+  const effectiveProjectId = lookup.project_id || projectId
+  const reportCount = Number(lookup.report_count || 0)
+
+  // 1. 如果尚未生成 media_report，则重置媒体探针并重新投递
+  if (reportCount === 0) {
+    runPsql(`
+      DELETE FROM media_job_attempt WHERE media_job_id IN (SELECT media_job_id FROM media_job WHERE clip_asset_id = '${clipAssetId}');
+      DELETE FROM outbox_event WHERE aggregate_id IN (SELECT media_job_id FROM media_job WHERE clip_asset_id = '${clipAssetId}');
+      DELETE FROM media_job WHERE clip_asset_id = '${clipAssetId}';
+      UPDATE clip_asset SET asset_status = 'UPLOADED' WHERE clip_asset_id = '${clipAssetId}';
+    `)
+
+    const probeUrl = `http://localhost:8080/api/v1/projects/${effectiveProjectId}/clip-assets/${clipAssetId}/media-probe-jobs`
+    await fetch(probeUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer synthetic-local-admin-bearer-token-do-not-reuse',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `reawaken-probe-${clipAssetId}-${Date.now()}`,
+      },
+    }).catch(() => undefined)
+  }
+
+  // 2. 触发或重试 MediaPipe 手部检测
+  const handUrl = `http://localhost:8080/api/v1/projects/${effectiveProjectId}/videos/${clipAssetId}/hand-pose-detections`
+  await fetch(handUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer synthetic-local-admin-bearer-token-do-not-reuse',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `reawaken-hand-${clipAssetId}-${Date.now()}`,
+      'X-Request-Id': randomUUID(),
+    },
+  }).catch(() => undefined)
+
+  // 3. 触发或重试 Qwen 动作分割检测
+  const actionUrl = `http://localhost:8080/api/v1/projects/${effectiveProjectId}/capture-groups/${captureSessionId}/action-candidate-jobs`
+  await fetch(actionUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer synthetic-local-admin-bearer-token-do-not-reuse',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `reawaken-action-${captureSessionId}-${Date.now()}`,
+      'X-Request-Id': randomUUID(),
+    },
+  }).catch(() => undefined)
+
+  return { ok: true, clipAssetId, captureSessionId }
 }
 
 // CLI 执行入口

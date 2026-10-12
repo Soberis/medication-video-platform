@@ -46,6 +46,31 @@ const executeSql = (sql) => runPsql(sql);
  * 1. 媒体探针平稳灌溉 (上游流转)
  */
 async function feedMediaProbes(batchLimit = 15) {
+  // 自动检测并自愈卡在 INGESTING 超过 3 分钟的遗留排队任务
+  const stuckRows = querySql(`
+    SELECT c.clip_asset_id || ',' || COALESCE(j.media_job_id::text, '')
+    FROM clip_asset c
+    JOIN media_job j ON j.clip_asset_id = c.clip_asset_id
+    WHERE c.project_id = '${PROJECT_ID}'
+      AND c.asset_status = 'INGESTING'
+      AND j.status = 'QUEUED'
+      AND j.updated_at < NOW() - INTERVAL '3 minutes'
+    LIMIT 10;
+  `);
+  if (stuckRows) {
+    const stuckItems = stuckRows.split('\n').filter(Boolean).map(l => l.split(','));
+    const stuckJobIds = stuckItems.filter(i => i[1]).map(i => `'${i[1]}'`).join(',');
+    const stuckClipIds = stuckItems.map(i => `'${i[0]}'`).join(',');
+    if (stuckJobIds) {
+      executeSql(`
+        DELETE FROM media_job_attempt WHERE media_job_id IN (${stuckJobIds});
+        DELETE FROM outbox_event WHERE aggregate_id IN (${stuckJobIds});
+        DELETE FROM media_job WHERE media_job_id IN (${stuckJobIds});
+        UPDATE clip_asset SET asset_status = 'UPLOADED' WHERE clip_asset_id IN (${stuckClipIds});
+      `);
+    }
+  }
+
   const ingestingCount = parseInt(
     querySql(`SELECT count(*) FROM clip_asset WHERE project_id = '${PROJECT_ID}' AND asset_status = 'INGESTING';`) || '0',
     10
