@@ -11,7 +11,7 @@
 | 角色 | 仓库 | 核心技术栈 | 职责定位 |
 | :--- | :--- | :--- | :--- |
 | **公开示范挖掘源** | [medication-dataset-tools](https://github.com/Soberis/medication-dataset-tools/tree/dev) | Python / Playwright / OpenCV | 第一人称及双手实操网络视频跨平台检索、批量采集、时序多锚点量化质检与去重 |
-| **边缘采集端** | [medication-camera](https://github.com/Soberis/medication-camera/tree/dev) | RK3588 / Orbbec SDK / C++ | 多机位同步录制、硬件/HTTP 触发、本地 Spool 缓冲池与 S3 批量断网直传 |
+| **边缘采集端** | [medication-camera-edge](https://github.com/Soberis/medication-camera-edge/tree/dev) | RK3588 / Orbbec SDK / C++ | 多机位同步录制、硬件/HTTP 触发、本地 Spool 缓冲池与 S3 批量断网直传 |
 | **中心平台** | **medication-video-platform**（本项目） | Java 21 / React / Docker | 接收归组、媒体质检、手部姿态事实、预标注调度、人机协同复核与 HDF5 导出 |
 | **动作推理节点** | [medication-action-worker](https://github.com/Soberis/medication-action-worker/tree/dev) | RTX 4090 / PyTorch / Qwen | 监听 RabbitMQ 任务，执行 Qwen3.5-4B 有界切片动作时序推理与租约回传 |
 
@@ -19,7 +19,7 @@
 
 ```mermaid
 flowchart LR
-    subgraph Edge["边缘采集端 (medication-camera)"]
+    subgraph Edge["边缘采集端 (medication-camera-edge)"]
         CAM["多机位相机 / 硬件触发器"] --> REC["录制与转码"]
         REC --> SPOOL["本地 Spool 缓冲池"]
         SPOOL --> UPL["3D 阈值批量上传"]
@@ -66,7 +66,7 @@ flowchart LR
 V1.36 的主链流水线：
 
 ```text
-数据接收 (medication-camera / medication-dataset-tools)
+数据接收 (medication-camera-edge / medication-dataset-tools)
 → CaptureGroup → CameraStream / ClipAsset
 → Media Probe 媒体质检
   ├─ MediaPipe 手部事实 (platform.ai.hand-pose.v1) ────────┐
