@@ -6,10 +6,11 @@
 
 ## 关联项目生态
 
-本项目与边缘采集端、GPU AI 推理节点构成端-云-算力闭环流水线：
+本项目与公开挖掘源、边缘采集端及 GPU AI 推理节点构成端-云-算力闭环流水线：
 
 | 角色 | 仓库 | 核心技术栈 | 职责定位 |
 | :--- | :--- | :--- | :--- |
+| **公开示范挖掘源** | [medication-dataset-tools](https://github.com/Soberis/medication-dataset-tools/tree/dev) | Python / Playwright / OpenCV | 第一人称及双手实操网络视频跨平台检索、批量采集、时序多锚点量化质检与去重 |
 | **边缘采集端** | [medication-camera](https://github.com/Soberis/medication-camera/tree/dev) | RK3588 / Orbbec SDK / C++ | 多机位同步录制、硬件/HTTP 触发、本地 Spool 缓冲池与 S3 批量断网直传 |
 | **中心平台** | **medication-video-platform**（本项目） | Java 21 / React / Docker | 接收归组、媒体质检、手部姿态事实、预标注调度、人机协同复核与 HDF5 导出 |
 | **动作推理节点** | [medication-action-worker](https://github.com/Soberis/medication-action-worker/tree/dev) | RTX 4090 / PyTorch / Qwen | 监听 RabbitMQ 任务，执行 Qwen3.5-4B 有界切片动作时序推理与租约回传 |
@@ -24,13 +25,18 @@ flowchart LR
         SPOOL --> UPL["3D 阈值批量上传"]
     end
 
+    subgraph Harvester["公开示范挖掘端 (medication-dataset-tools)"]
+        HARV["跨平台检索与采集"] --> QUANT["多锚点质量量化打分"]
+        QUANT --> BATCH_IMP["批量导入脚本 (tools/import-web-video-batch.mjs)"]
+    end
+
     subgraph Platform["中心数据平台 (medication-video-platform)"]
         INGEST["CaptureGroup 入库"]
         PROBE["Media Probe 质检"]
         MP["MediaPipe 手部检测 (事实证据)"]
         SCHED["Action Job 调度 (RabbitMQ)"]
         UI["Web 工作台 (自动草稿/人工复核)"]
-        EXP["HDF5 数据集导出"]
+        EXP["HDF5 后台异步导出"]
     end
 
     subgraph GPU["AI 推理节点 (medication-action-worker)"]
@@ -39,6 +45,7 @@ flowchart LR
     end
 
     UPL -->|S3 Multipart + HTTP API| INGEST
+    BATCH_IMP -->|手部前置门禁 + API 入库| INGEST
     INGEST --> PROBE
     PROBE --> MP
     PROBE --> SCHED
@@ -52,21 +59,22 @@ flowchart LR
 
 ---
 
-## 核心业务基线（V1.35 Consolidated Baseline）
+## 核心业务基线（V1.36 Consolidated Baseline）
 
-当前唯一需求入口：**V1.35 Consolidated Baseline**（需求已收敛；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍分别约束待决实施项）。V1.35 正文自包含，不要求逐层阅读历史版本；V1.28 仍是上一正式运行时基线，需求收敛不表示现有 runtime 已全部实现或可随意删除兼容内容。
+当前唯一需求入口：**V1.36 Consolidated Baseline**（冻结产品边界、主链、乐观自动核准与异常重新编辑 ADR-0006、AI/人工事实隔离和唯一 HDF5 导出语义；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍为 PENDING 约束待决实施项）。V1.36 正文自包含，不要求逐层阅读历史版本；V1.28 仍是上一正式运行时基线，需求收敛不表示现有 runtime 已全部实现或可随意删除兼容内容。
 
-V1.35 的唯一主链：
+V1.36 的主链流水线：
 
 ```text
-数据接收 (medication-camera)
+数据接收 (medication-camera / medication-dataset-tools)
 → CaptureGroup → CameraStream / ClipAsset
 → Media Probe 媒体质检
   ├─ MediaPipe 手部事实 (platform.ai.hand-pose.v1) ────────┐
   └─ Action Candidate 动作候选 (medication-action-worker)    │
-→ 自动标注草稿铺设 → 人工显式提交与复核 ──────────────────┤
+→ 自动标注草稿铺设 → 乐观自动核准 / 异常人工复核 ─────────┤
                                                           ↓
                            Export Eligibility → human-demonstration-hdf5.v2
+                                        (后台异步任务池 + 实时悬浮监控)
 ```
 
 - **数据建模边界**：`ClipAsset` 是不可变视频证据对象，不是独立的产品工作流对象；`CaptureGroup` 是一次采集记录；`CameraStream` 是视角。采集组内的所有机位均为等权观测者，**不设人为的主副机位之分**。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
@@ -147,7 +155,9 @@ workers/                     Media 与 AI Worker
 contracts/                   OpenAPI、事件、JSON Schema 和 profiles
 api-tests/bruno/             服务核心场景
 infra/docker-compose/        本地基础设施
-docs/                        当前规范与历史参考
+docs/                        当前规范、需求基线与历史参考
+tools/                       运维与质检工具箱（Web视频导入、手部前置门禁、具身数据质量分析）
+exports/                     标准化 HDF5 导出产物仓库与质检报告
 ```
 
 ## 数据与安全
