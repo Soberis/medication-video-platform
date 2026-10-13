@@ -42,6 +42,7 @@ export interface ActionCandidateJob {
   clip_asset_id: string
   status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
   attempt: number
+  failure_reason?: string | null
   created_at: string
   updated_at: string
 }

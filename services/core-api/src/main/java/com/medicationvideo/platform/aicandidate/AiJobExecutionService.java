@@ -36,8 +36,21 @@ class AiJobExecutionService {
 
 	private final int maxAttempts;
 
+	private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+	AiJobExecutionService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
+			ClipAssetAnalysisReadService assetRead, JdbcTemplate jdbcTemplate, Duration leaseDuration,
+			Duration heartbeatInterval, Duration inputAuthorizationLifetime, Duration resultClockSkew,
+			int maxAttempts) {
+		this(jobRepository, attemptRepository, assetRead, jdbcTemplate, null, leaseDuration, heartbeatInterval,
+				inputAuthorizationLifetime, resultClockSkew, maxAttempts);
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
 	AiJobExecutionService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
 			ClipAssetAnalysisReadService assetRead, JdbcTemplate jdbcTemplate,
+			@org.springframework.beans.factory.annotation.Autowired(
+					required = false) org.springframework.context.ApplicationEventPublisher eventPublisher,
 			@Value("${platform.ai.hand-pose.lease-duration:PT30M}") Duration leaseDuration,
 			@Value("${platform.ai.hand-pose.heartbeat-interval:PT5M}") Duration heartbeatInterval,
 			@Value("${platform.ai.hand-pose.input-authorization-ttl:PT15M}") Duration inputAuthorizationLifetime,
@@ -48,6 +61,7 @@ class AiJobExecutionService {
 		this.attemptRepository = attemptRepository;
 		this.assetRead = assetRead;
 		this.jdbcTemplate = jdbcTemplate;
+		this.eventPublisher = eventPublisher;
 		this.leaseDuration = leaseDuration;
 		this.heartbeatInterval = heartbeatInterval;
 		this.inputAuthorizationLifetime = inputAuthorizationLifetime;
@@ -163,11 +177,25 @@ class AiJobExecutionService {
 		if (request.outcome() == AiHandPoseRunOutcome.SUCCEEDED) {
 			attempt.succeed(now);
 			job.succeed(now, request.handResult());
+			if (this.eventPublisher != null) {
+				UUID captureGroupId = resolveCaptureGroupId(job.getClipAssetId());
+				if (captureGroupId != null) {
+					this.eventPublisher.publishEvent(
+							new HandPoseJobCompletedEvent(job.getProjectId(), captureGroupId, job.getClipAssetId()));
+				}
+			}
 		}
 		else {
 			attempt.fail(now);
 			job.fail(now);
 		}
+	}
+
+	private UUID resolveCaptureGroupId(UUID clipAssetId) {
+		var list = this.jdbcTemplate.queryForList(
+				"SELECT capture_session_id FROM camera_stream WHERE clip_asset_id = ? LIMIT 1", UUID.class,
+				clipAssetId);
+		return list.isEmpty() ? null : list.getFirst();
 	}
 
 	private AiCandidateJob lockJob(UUID jobId) {

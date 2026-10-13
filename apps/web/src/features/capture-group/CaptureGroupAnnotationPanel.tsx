@@ -480,9 +480,22 @@ export function CaptureGroupAnnotationPanel({
           tooltip: `AI 已生成 ${validCandidates.length} 段候选，可直接核对微调`,
         }
       : currentActionJob?.status === 'FAILED'
-        ? { tone: 'destructive', label: 'AI 分析失败' }
+        ? {
+            tone: 'destructive',
+            label: 'AI 分析失败',
+            tooltip: currentActionJob.failure_reason
+              ? `失败原因: ${currentActionJob.failure_reason}（可点击右侧重试）`
+              : '动作分析未成功完成，可点击右侧按钮重新尝试',
+          }
         : currentActionJob?.status === 'RUNNING' || currentActionJob?.status === 'QUEUED'
-          ? { tone: 'information', label: 'AI 分析中' }
+          ? {
+              tone: 'information',
+              label: 'AI 分析中',
+              tooltip:
+                currentActionJob.status === 'RUNNING'
+                  ? `4090 正在执行 Qwen 动作分析 (第 ${currentActionJob.attempt} 次尝试，预计需 1~2 分钟)`
+                  : '任务已进入消息队列，等待 4090 算力 Worker 拉取并执行',
+            }
           : currentActionJob?.status === 'SUCCEEDED'
             ? { tone: 'neutral', label: 'AI 已完成 · 可直接标注' }
             : { tone: 'neutral', label: '等待 AI 自动分析' }

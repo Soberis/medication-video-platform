@@ -60,7 +60,21 @@ public class ActionCandidateJobService {
 
 	private final AiCandidateJobAttemptQueueService attemptQueue;
 
+	private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+
 	private final int maxAttempts;
+
+	public ActionCandidateJobService(AiCandidateJobRepository jobRepository,
+			AiCandidateJobAttemptRepository attemptRepository, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+			ProjectAccessService projectAccessService, AssetCatalogQueryService assetCatalog,
+			AiCandidateJobIdempotencyReceiptRepository receiptRepository, AuditEventRecorder auditRecorder,
+			AiJobDispatchPort dispatchPort, AiLeaseCapabilityFactory capabilityFactory,
+			ActionJobEnvelopeFactory actionEnvelopeFactory, AiCandidateJobAttemptQueueService attemptQueue,
+			int maxAttempts) {
+		this(jobRepository, attemptRepository, jdbcTemplate, objectMapper, projectAccessService, assetCatalog,
+				receiptRepository, auditRecorder, dispatchPort, capabilityFactory, actionEnvelopeFactory, attemptQueue,
+				null, maxAttempts);
+	}
 
 	@Autowired
 	public ActionCandidateJobService(AiCandidateJobRepository jobRepository,
@@ -73,6 +87,7 @@ public class ActionCandidateJobService {
 			@Autowired(required = false) AiLeaseCapabilityFactory capabilityFactory,
 			@Autowired(required = false) ActionJobEnvelopeFactory actionEnvelopeFactory,
 			@Autowired(required = false) AiCandidateJobAttemptQueueService attemptQueue,
+			@Autowired(required = false) org.springframework.context.ApplicationEventPublisher eventPublisher,
 			@Value("${platform.ai.hand-pose.max-attempts:3}") int maxAttempts) {
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
@@ -87,6 +102,7 @@ public class ActionCandidateJobService {
 		this.actionEnvelopeFactory = actionEnvelopeFactory != null ? actionEnvelopeFactory
 				: new ActionJobEnvelopeFactory(assetCatalog, null);
 		this.attemptQueue = attemptQueue;
+		this.eventPublisher = eventPublisher;
 		HandPoseRetryPolicy.validateMaxAttempts(maxAttempts);
 		this.maxAttempts = maxAttempts;
 	}
@@ -168,6 +184,10 @@ public class ActionCandidateJobService {
 		attempt.succeed(now);
 		job.succeed(now, HandPoseResult.UNKNOWN);
 		LOGGER.info("Action candidate job {} succeeded with {} segments", jobId, request.segments().size());
+		if (this.eventPublisher != null) {
+			this.eventPublisher.publishEvent(
+					new ActionCandidateJobCompletedEvent(job.getProjectId(), captureGroupId, job.getClipAssetId()));
+		}
 	}
 
 	@Transactional(readOnly = true)
@@ -440,14 +460,6 @@ public class ActionCandidateJobService {
 			throw new HandPoseJobException("AI_ACTION_RETRY_STATE_CONFLICT",
 					"Only a failed action candidate attempt can be retried.", 409);
 		}
-		if (attempt.getAttempt() >= this.maxAttempts) {
-			throw new HandPoseJobException("AI_ACTION_RETRY_LIMIT_REACHED",
-					"The maximum number of action candidate attempts has been reached.", 409);
-		}
-		if (!attempt.isRetryable()) {
-			throw new HandPoseJobException("AI_ACTION_RETRY_NOT_ALLOWED",
-					"This action candidate failure is not eligible for manual retry.", 409);
-		}
 
 		var now = Instant.now();
 		job.requeueForManualRetry(now);
@@ -505,12 +517,15 @@ public class ActionCandidateJobService {
 
 	private ActionCandidateJobResponse response(AiCandidateJob job, UUID captureGroupId) {
 		int attemptNum = 1;
+		String failureReason = null;
 		var attempt = this.attemptRepository.findFirstByAiJobIdOrderByAttemptDesc(job.getAiJobId());
 		if (attempt.isPresent()) {
 			attemptNum = attempt.get().getAttempt();
+			failureReason = attempt.get().getFailureReason();
 		}
 		return new ActionCandidateJobResponse(job.getAiJobId(), job.getProjectId(), captureGroupId,
-				job.getClipAssetId(), job.getStatus().name(), attemptNum, job.getCreatedAt(), job.getUpdatedAt());
+				job.getClipAssetId(), job.getStatus().name(), attemptNum, failureReason, job.getCreatedAt(),
+				job.getUpdatedAt());
 	}
 
 }
