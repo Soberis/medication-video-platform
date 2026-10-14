@@ -221,34 +221,44 @@ describe('project HDF5 selection', () => {
     ).rejects.toThrow('项目候选列表读取未完成')
   })
 
-  it('excludes videos without hand pose from export selection and only renders exportable rows', async () => {
+  it('hides groups without an approved auto-approval task from export selection', async () => {
     const user = userEvent.setup()
-    stubCandidates()
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.pathname.endsWith('/annotation-tasks')) {
+        // Only 视频 2 and 视频 3 passed dual evidence + auto-approval;
+        // 视频 1 (no hand) never received an approved task.
+        return Promise.resolve(
+          jsonResponse(
+            taskList(groups.slice(1, 3).map((group) => approvedGroupTask(group)), 'PROJECT'),
+          ),
+        )
+      }
+      const secondPage = url.searchParams.has('cursor')
+      return Promise.resolve(
+        jsonResponse({
+          items: (secondPage ? groups.slice(1) : groups.slice(0, 2)).map(summaryFromGroup),
+          next_cursor: secondPage ? null : 'page-2',
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
     render(
       <AntdApp>
-        <ExportDataMenu
-          projectId={projectId}
-          pipelineItems={{
-            [groups[0]!.capture_group_id]: {
-              pipeline_status: 'NO_HAND',
-              mp_status: 'SUCCEEDED',
-              mp_hand_result: 'NO_HAND_DETECTED',
-              qw_status: null,
-              action_candidate_count: 2,
-            },
-          }}
-        />
+        <ExportDataMenu projectId={projectId} />
       </AntdApp>,
     )
     await user.click(screen.getByRole('button', { name: '导出数据' }))
     const dialog = screen.getByRole('dialog', { name: '导出数据' })
     await within(dialog).findByRole('checkbox', { name: '选择导出 视频 2' })
-    
-    // Video 1 without hand pose is completely excluded from the dialog
+
+    // 视频 1 (no hand / not auto-approved) never appears in the dialog.
     expect(within(dialog).queryByText('视频 1')).not.toBeInTheDocument()
     expect(within(dialog).queryByText('未检出手部')).not.toBeInTheDocument()
+    expect(within(dialog).getAllByRole('checkbox', { name: /选择导出/ })).toHaveLength(2)
 
-    // Clicking 全选 only selects exportable rows (videos 2 and 3)
+    // Clicking 全选 only selects exportable rows (视频 2 and 视频 3).
     await user.click(within(dialog).getByRole('checkbox', { name: '全选' }))
     expect(within(dialog).getByText('已选择 2 条')).toBeInTheDocument()
     expect(within(dialog).getByRole('checkbox', { name: '选择导出 视频 2' })).toBeChecked()

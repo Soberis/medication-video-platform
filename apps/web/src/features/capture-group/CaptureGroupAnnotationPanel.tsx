@@ -205,7 +205,6 @@ export function CaptureGroupAnnotationPanel({
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
   const isSubmittingRevisionRef = useRef(false)
   const [isRetryingAction, setIsRetryingAction] = useState(false)
-  const [isReawakening, setIsReawakening] = useState(false)
   const [inputVersionConflict, setInputVersionConflict] = useState(false)
   const [isRefreshingTask, setIsRefreshingTask] = useState(false)
 
@@ -222,27 +221,6 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
-  async function handleReawakenAnalysis() {
-    setIsReawakening(true)
-    try {
-      const res = await fetch('/api/dev/reawaken-capture-group', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ captureGroupId, projectId }),
-      })
-      const result = await res.json()
-      if (result.ok) {
-        await onRefresh()
-        void message.success('已重新唤醒分析任务，正在后台执行媒体探针与 AI 分析…')
-      } else {
-        void message.warning(result.error ?? '唤醒请求未能成功调度')
-      }
-    } catch {
-      void message.error('唤醒请求失败，请检查服务连接')
-    } finally {
-      setIsReawakening(false)
-    }
-  }
   const [actionCandidates, setActionCandidates] = useState<ActionCandidate[]>([])
   const [actionJob, setActionJob] = useState<ActionCandidateJob | null>(null)
   const [actionReadFailed, setActionReadFailed] = useState(false)
@@ -1170,25 +1148,15 @@ export function CaptureGroupAnnotationPanel({
                 <StatusBadge tone={aiStatus.tone}>{aiStatus.label}</StatusBadge>
               </span>
             </Tooltip>
-            {canPrepareTask && (
-              currentActionJob?.status === 'FAILED' ? (
-                <Button
-                  size="small"
-                  loading={isRetryingAction}
-                  onClick={() => void handleRetryActionJob()}
-                >
-                  重试动作分析
-                </Button>
-              ) : (!currentActionJob || aiStatus.label === '等待 AI 自动分析') ? (
-                <Button
-                  size="small"
-                  loading={isReawakening}
-                  onClick={() => void handleReawakenAnalysis()}
-                >
-                  唤醒 AI 分析
-                </Button>
-              ) : null
-            )}
+            {canPrepareTask && currentActionJob?.status === 'FAILED' ? (
+              <Button
+                size="small"
+                loading={isRetryingAction}
+                onClick={() => void handleRetryActionJob()}
+              >
+                重试动作分析
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1297,7 +1265,7 @@ export function CaptureGroupAnnotationPanel({
                 <span>未检测到有效动作候选</span>
               </div>
               <p style={{ margin: 0, lineHeight: 1.5 }}>
-                AI 模型未在该视频中识别出临床配药动作段。若此视频为非配药、输液打针或日常杂拍，请点击右上角【废弃并下一条】直接清退。
+                AI 模型未在该视频中识别出临床配药动作段。可点击上方【重试动作分析】重新检测，或使用【添加时间段】手动补录；该组在此状态下不会自动核准，需人工处理后才会进入导出。
               </p>
             </div>
           )}

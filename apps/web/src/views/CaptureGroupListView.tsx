@@ -1,17 +1,12 @@
-import { App as AntdApp, Button, Input, Pagination, Popconfirm, Segmented } from 'antd'
-import { ArrowRight, RotateCw, Search, Trash2, Video } from 'lucide-react'
+import { Button, Input, Pagination, Segmented } from 'antd'
+import { ArrowRight, Search, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import AnnotationTaskListView from '@/views/AnnotationTaskListView'
 
 import {
   CaptureGroupApiError,
-  cleanInvalidCaptureGroups,
-  fetchCaptureGroupsPipeline,
   listAllCaptureGroupSummaries,
-  retryFailedHandPoseBatch,
-  type CaptureGroupPipelineItem,
-  type CaptureGroupPipelineStats,
   type CaptureGroupSummary,
 } from '@/api/capture-groups'
 import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
@@ -58,7 +53,6 @@ interface ListReturnState {
 
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
-  const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -84,12 +78,6 @@ export default function CaptureGroupListView() {
   const [taskReadState, setTaskReadState] = useState<AnnotationTaskReadState>({
     status: 'loading',
   })
-  const [pipelineData, setPipelineData] = useState<{
-    stats: CaptureGroupPipelineStats | null
-    items: Record<string, CaptureGroupPipelineItem>
-  }>({ stats: null, items: {} })
-  const [isCleaningInvalid, setIsCleaningInvalid] = useState(false)
-  const [isRetryingHands, setIsRetryingHands] = useState(false)
   const [project, setProject] = useState<DataProject | null>(null)
   const currentProject = project?.project_id === projectId ? project : null
   const [searchQuery, setSearchQuery] = useState('')
@@ -107,41 +95,15 @@ export default function CaptureGroupListView() {
   }, [taskReadState])
 
   const exportableRows = useMemo(() => {
-    return rows.filter((g) => {
-      const task = tasksByGroupId.get(g.capture_group_id)
-      if (!isHumanAnnotationExportReady(task)) return false
-      const p = pipelineData.items[g.capture_group_id]
-      if (
-        p &&
-        (p.pipeline_status === 'NO_HAND' ||
-          p.pipeline_status === 'FAILED' ||
-          p.pipeline_status === 'NO_ACTION' ||
-          p.mp_hand_result === 'NO_HAND_DETECTED')
-      ) {
-        return false
-      }
-      return true
-    })
-  }, [rows, tasksByGroupId, pipelineData.items])
+    return rows.filter((g) => isHumanAnnotationExportReady(tasksByGroupId.get(g.capture_group_id)))
+  }, [rows, tasksByGroupId])
 
   const viewFilteredRows = useMemo(() => {
-    if (activeView === 'ready') {
-      return rows.filter((g) => pipelineData.items[g.capture_group_id]?.pipeline_status === 'READY')
-    }
-    if (activeView === 'processing') {
-      return rows.filter((g) => pipelineData.items[g.capture_group_id]?.pipeline_status === 'PROCESSING')
-    }
-    if (activeView === 'invalid') {
-      return rows.filter((g) => {
-        const s = pipelineData.items[g.capture_group_id]?.pipeline_status
-        return s === 'NO_HAND' || s === 'FAILED' || s === 'NO_ACTION'
-      })
-    }
     if (activeView === 'exportable') {
       return exportableRows
     }
     return rows
-  }, [activeView, exportableRows, pipelineData.items, rows])
+  }, [activeView, exportableRows, rows])
 
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -273,41 +235,6 @@ export default function CaptureGroupListView() {
     [projectId],
   )
 
-  const loadPipeline = useCallback(async () => {
-    const res = await fetchCaptureGroupsPipeline(projectId)
-    if (res?.ok) {
-      setPipelineData({ stats: res.stats, items: res.items })
-    }
-  }, [projectId])
-
-  const handleBatchCleanInvalid = useCallback(async () => {
-    if (isCleaningInvalid) return
-    setIsCleaningInvalid(true)
-    try {
-      const res = await cleanInvalidCaptureGroups({ projectId })
-      void message.success(`已清理 ${res.deletedCount} 条未检出视频`)
-      await Promise.all([loadGroups(), loadTasks(), loadPipeline()])
-    } catch (err) {
-      void message.error(`清理失败: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setIsCleaningInvalid(false)
-    }
-  }, [isCleaningInvalid, loadGroups, loadPipeline, loadTasks, message, projectId])
-
-  const handleBatchRetryHands = useCallback(async () => {
-    if (isRetryingHands) return
-    setIsRetryingHands(true)
-    try {
-      const res = await retryFailedHandPoseBatch({ limit: 100, projectId })
-      void message.success(`已触发 ${res.retriedCount} 条视频手部重新检测，后台正在并发分析中`)
-      await loadPipeline()
-    } catch (err) {
-      void message.error(`批量重试失败: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setIsRetryingHands(false)
-    }
-  }, [isRetryingHands, loadPipeline, message, projectId])
-
   useEffect(() => {
     const request = new AbortController()
     void getProject(projectId, request.signal)
@@ -327,7 +254,6 @@ export default function CaptureGroupListView() {
       if (restored) window.scrollTo(0, restored.scrollY)
       else void loadGroups()
       void loadTasks()
-      void loadPipeline()
     }, 0)
 
     return () => {
@@ -340,7 +266,7 @@ export default function CaptureGroupListView() {
       taskRequest.current = null
       rowsRef.current = []
     }
-  }, [loadGroups, loadPipeline, loadTasks, projectId, restoredList])
+  }, [loadGroups, loadTasks, projectId, restoredList])
 
   useEffect(() => {
     if (
@@ -361,7 +287,7 @@ export default function CaptureGroupListView() {
         timer = null
         if (isDisposed) return
         if (!document.hidden) {
-          await Promise.all([loadGroups(true), loadTasks(true), loadPipeline()])
+          await Promise.all([loadGroups(true), loadTasks(true)])
         }
         if (!isDisposed) {
           scheduleNext()
@@ -373,7 +299,7 @@ export default function CaptureGroupListView() {
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        void Promise.all([loadGroups(true), loadTasks(true), loadPipeline()])
+        void Promise.all([loadGroups(true), loadTasks(true)])
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -386,15 +312,12 @@ export default function CaptureGroupListView() {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [currentPage, isTaskView, loadGroups, loadPipeline, loadState, loadTasks, searchQuery])
+  }, [currentPage, isTaskView, loadGroups, loadState, loadTasks, searchQuery])
 
   const openCaptureGroup = useCallback(
     (targetGroupId: string) => {
       let filterLabel = ''
-      if (activeView === 'invalid') filterLabel = '未检出手部 / 非配药'
-      else if (activeView === 'ready') filterLabel = '已就绪'
-      else if (activeView === 'processing') filterLabel = '处理中'
-      else if (activeView === 'exportable') filterLabel = '可导出'
+      if (activeView === 'exportable') filterLabel = '可导出'
       if (searchQuery.trim()) {
         filterLabel = filterLabel ? `${filterLabel} (搜: ${searchQuery.trim()})` : `搜索: ${searchQuery.trim()}`
       }
@@ -438,9 +361,7 @@ export default function CaptureGroupListView() {
 
   const viewOptions = useMemo(() => {
     const allCount = rows.length
-    const readyCount = pipelineData.stats?.ready
-    const processingCount = pipelineData.stats?.processing
-    const invalidCount = pipelineData.stats?.invalid
+    const exportableCount = exportableRows.length
 
     return [
       {
@@ -455,46 +376,14 @@ export default function CaptureGroupListView() {
       {
         label: (
           <span className="capture-group-tab-item">
-            <span>AI 已就绪</span>
-            {readyCount !== undefined ? (
-              <span className="capture-group-tab-badge is-ready">{readyCount}</span>
+            <span>可导出</span>
+            {exportableCount > 0 ? (
+              <span className="capture-group-tab-badge is-ready">{exportableCount}</span>
             ) : null}
           </span>
         ),
-        value: 'ready',
+        value: 'exportable',
       },
-      {
-        label: (
-          <span className="capture-group-tab-item">
-            <span>分析中</span>
-            {processingCount !== undefined && processingCount > 0 ? (
-              <span className="capture-group-tab-badge is-processing">{processingCount}</span>
-            ) : null}
-          </span>
-        ),
-        value: 'processing',
-      },
-      ...((invalidCount !== undefined && invalidCount > 0) || activeView === 'invalid'
-        ? [
-            {
-              label: (
-                <span className="capture-group-tab-item">
-                  <span>
-                    {pipelineData.stats?.noHand
-                      ? '未检出手部'
-                      : pipelineData.stats?.noAction
-                        ? '非配药 / 无动作'
-                        : '非配药 / 异常'}
-                  </span>
-                  {invalidCount !== undefined && invalidCount > 0 ? (
-                    <span className="capture-group-tab-badge is-invalid">{invalidCount}</span>
-                  ) : null}
-                </span>
-              ),
-              value: 'invalid',
-            },
-          ]
-        : []),
       ...(isTaskView
         ? [
             {
@@ -521,16 +410,7 @@ export default function CaptureGroupListView() {
           ]
         : []),
     ]
-  }, [
-    activeView,
-    isTaskView,
-    pipelineData.stats?.invalid,
-    pipelineData.stats?.noAction,
-    pipelineData.stats?.noHand,
-    pipelineData.stats?.processing,
-    pipelineData.stats?.ready,
-    rows.length,
-  ])
+  }, [activeView, exportableRows, isTaskView, rows.length])
 
   return (
     <>
@@ -558,7 +438,6 @@ export default function CaptureGroupListView() {
                   <ExportDataMenu
                     key={`${projectId}:${viewer}`}
                     projectId={projectId}
-                    pipelineItems={pipelineData.items}
                   />
                 ) : null}
               </>
@@ -569,7 +448,6 @@ export default function CaptureGroupListView() {
                 setRefreshEpoch((v) => v + 1)
                 void loadGroups()
                 void loadTasks()
-                void loadPipeline()
               }}
             />
           </>
@@ -596,34 +474,6 @@ export default function CaptureGroupListView() {
         </div>
         {rows.length || activeView !== 'all' ? (
           <div className="capture-group-list-toolbar-actions">
-            {activeView === 'invalid' && (pipelineData.stats?.invalid ?? 0) > 0 ? (
-              <>
-                <Button
-                  type="primary"
-                  icon={<RotateCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-                  loading={isRetryingHands}
-                  onClick={() => void handleBatchRetryHands()}
-                >
-                  重新检测手部 ({pipelineData.stats?.invalid}条)
-                </Button>
-                <Popconfirm
-                  title={`确定清理全部 ${pipelineData.stats?.invalid} 条无效或非配药视频？`}
-                  description="该操作将彻底级联删除未检出手部或无动作候选（非配药）的视频数据，并释放关联的 AI、媒体与任务记录。无法撤销。"
-                  okText="确认清理"
-                  cancelText="取消"
-                  okButtonProps={{ danger: true, loading: isCleaningInvalid }}
-                  onConfirm={() => void handleBatchCleanInvalid()}
-                >
-                  <Button
-                    danger
-                    icon={<Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />}
-                    loading={isCleaningInvalid}
-                  >
-                    清理未检出视频
-                  </Button>
-                </Popconfirm>
-              </>
-            ) : null}
             <Input
               className="capture-group-list-search"
               placeholder={!isTaskView ? '搜索视频标识或时间…' : '搜索任务或采集记录…'}
@@ -690,15 +540,9 @@ export default function CaptureGroupListView() {
                   <span>
                     {searchQuery
                       ? `未找到与 “${searchQuery}” 匹配的采集记录`
-                      : activeView === 'invalid'
-                        ? '暂无未检出手部或需关注的视频'
-                        : activeView === 'exportable'
-                          ? '暂无可导出资产（需完成人工质检与动作核准）'
-                          : activeView === 'ready'
-                            ? '暂无 AI 已就绪的视频'
-                            : activeView === 'processing'
-                              ? '当前没有正在分析中的视频'
-                              : '暂无匹配的采集记录'}
+                      : activeView === 'exportable'
+                        ? '暂无可导出资产（需手部与动作双合格后由系统自动核准）'
+                        : '暂无匹配的采集记录'}
                   </span>
                   {searchQuery ? (
                     <Button size="small" onClick={() => setSearchQuery('')}>
@@ -728,7 +572,6 @@ export default function CaptureGroupListView() {
                     const eventTime = group.device_time_utc ?? group.created_at
                     const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
                     const task = tasksByGroupId.get(group.capture_group_id)
-                    const pipelineItem = pipelineData.items[group.capture_group_id]
                     return (
                       <div
                         className="capture-group-list-row"
@@ -800,49 +643,7 @@ export default function CaptureGroupListView() {
                           <div className="capture-group-list-main-status">
                             <dt className="visually-hidden">处理与质检状态</dt>
                             <dd>
-                              {pipelineItem ? (
-                                pipelineItem.pipeline_status === 'READY' ? (
-                                  isHumanAnnotationExportReady(task) ? (
-                                    <StatusIndicator tone="success">
-                                      已完成 · 可导出
-                                    </StatusIndicator>
-                                  ) : (
-                                    <>
-                                      <StatusIndicator tone="success">
-                                        AI 就绪
-                                        {pipelineItem.action_candidate_count
-                                          ? ` · ${pipelineItem.action_candidate_count}段动作`
-                                          : ' · 双手已检出'}
-                                      </StatusIndicator>
-                                      {task ? (
-                                        <span className="capture-group-task-stage-badge">
-                                          {formatTaskStatus(task)}
-                                        </span>
-                                      ) : null}
-                                    </>
-                                  )
-                                ) : pipelineItem.pipeline_status === 'PROCESSING' ? (
-                                  <StatusIndicator tone="information" ariaLive="polite">
-                                    AI 分析中…
-                                  </StatusIndicator>
-                                ) : pipelineItem.pipeline_status === 'NO_HAND' ? (
-                                  <StatusIndicator tone="neutral">
-                                    未检出手部
-                                  </StatusIndicator>
-                                ) : pipelineItem.pipeline_status === 'NO_ACTION' ? (
-                                  <StatusIndicator tone="warning">
-                                    无动作候选 (非配药)
-                                  </StatusIndicator>
-                                ) : pipelineItem.pipeline_status === 'FAILED' ? (
-                                  <StatusIndicator tone="warning">
-                                    需重新分析
-                                  </StatusIndicator>
-                                ) : (
-                                  <StatusIndicator tone="neutral">
-                                    待 AI 分析
-                                  </StatusIndicator>
-                                )
-                              ) : taskReadState.status === 'loading' ? (
+                              {taskReadState.status === 'loading' ? (
                                 <StatusIndicator ariaLive="polite" tone="information">
                                   人工任务读取中
                                 </StatusIndicator>
@@ -895,12 +696,7 @@ export default function CaptureGroupListView() {
                               openCaptureGroup(group.capture_group_id)
                             }}
                           >
-                            <span>
-                              {pipelineItem?.pipeline_status === 'READY' &&
-                              !isHumanAnnotationExportReady(task)
-                                ? '进入微调'
-                                : '查看视频'}
-                            </span>
+                            <span>查看视频</span>
                             <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                           </Link>
                         </footer>

@@ -33,6 +33,9 @@ public class ProjectAccessService {
 	@Transactional(readOnly = true)
 	public ProjectRole requireMember(UUID projectId, String actorId) {
 		requireActiveProject(projectId);
+		if (SystemActors.isSystemActor(actorId)) {
+			return ProjectRole.ADMIN;
+		}
 		var membership = this.membershipRepository.findByProjectIdAndActorId(projectId, actorId);
 		if (membership.isPresent()) {
 			if (!membership.get().isActive()) {
@@ -48,6 +51,10 @@ public class ProjectAccessService {
 
 	@Transactional(readOnly = true)
 	public ProjectRole requireAdministrator(UUID projectId, String actorId) {
+		if (SystemActors.isSystemActor(actorId)) {
+			requireActiveProject(projectId);
+			return ProjectRole.ADMIN;
+		}
 		if (!isLocalSyntheticActor(actorId)) {
 			requireEnabledPlatformAdministrator();
 		}
@@ -72,6 +79,9 @@ public class ProjectAccessService {
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireMember(UUID projectId, String actorId) {
 		lockActiveProjectForSystemProcessing(projectId);
+		if (SystemActors.isSystemActor(actorId)) {
+			return ProjectRole.ADMIN;
+		}
 		var membership = this.membershipRepository.findByProjectIdAndActorId(projectId, actorId);
 		if (membership.isPresent()) {
 			if (!membership.get().isActive()) {
@@ -100,6 +110,10 @@ public class ProjectAccessService {
 
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireAdministrator(UUID projectId, String actorId) {
+		if (SystemActors.isSystemActor(actorId)) {
+			lockActiveProjectForSystemProcessing(projectId);
+			return ProjectRole.ADMIN;
+		}
 		if (!isLocalSyntheticActor(actorId)) {
 			requireEnabledPlatformAdministrator();
 		}

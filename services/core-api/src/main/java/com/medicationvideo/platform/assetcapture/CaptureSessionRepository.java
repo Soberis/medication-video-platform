@@ -21,6 +21,19 @@ interface CaptureSessionRepository extends JpaRepository<CaptureSession, UUID> {
 	List<CaptureSession> findAllByProjectIdAndCaptureGroupWorkflowTrueOrderByCreatedAtDescCaptureSessionIdDesc(
 			UUID projectId);
 
+	/**
+	 * System-only projection of fully received capture groups across all projects, paged
+	 * for bounded background reconciliation. Project ACTIVE state is enforced by the
+	 * caller's access service.
+	 */
+	@Query("""
+			SELECT session FROM CaptureSession session
+			WHERE session.receiptState = com.medicationvideo.platform.assetcapture.CaptureGroupReceiptState.COMPLETE
+			  AND session.captureGroupWorkflow = TRUE
+			ORDER BY session.createdAt ASC, session.captureSessionId ASC
+			""")
+	List<CaptureSession> findCompleteCaptureGroupSessions(org.springframework.data.domain.Pageable pageable);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			SELECT session

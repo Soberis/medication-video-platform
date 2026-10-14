@@ -29,7 +29,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 - 核心领域模块为 `iamproject`、`assetcapture`、`mediaprivacy`、`annotationreview`、`qualitycleaning`、`datasetexport`、`aicandidate`、`governance`。
 - `integration` 是 CVAT、S3、RabbitMQ、OIDC 等端口和适配器层，不拥有业务真值。
 - Python Worker 只处理媒体和 AI 作业，不直接写业务表；当前唯一 `human-demonstration-hdf5.v2` 由 Core API 校验后导出，旧扁平展开表与 CSV 为历史格式。
-- AI 输出进入 `CandidateAnnotation`，手部检测进入 `HandPoseCandidate`；双合格时由 Core API 自动执行乐观核准（生成首份 Revision 并标记 APPROVED 与 COMPLETED，直接准入导出）。各机位均为等权客观观测，手部与动作自动检测，多视角实事求是一一对应；HDF5 关联当前已批准人工/系统核准区间与同源、provenance 有效的各机位手部样本，不人为设立主副机位。
+- AI 输出进入 `CandidateAnnotation`，手部检测进入 `HandPoseCandidate`；双合格时由 Core API 自动执行乐观核准（以 `AUTO_SYSTEM` 系统身份生成首份 Revision、签署 APPROVED 并标记 COMPLETED，直接准入导出；审计字段不得写成真人或伪造管理员上下文）。各机位均为等权客观观测，手部与动作自动检测，多视角实事求是一一对应；自动核准初始 correspondence 为单机位 `UNCERTAIN`（须带原因），不做自动跨机位时间对齐，跨机位对应在人工【重新编辑】时确认；HDF5 关联当前已批准人工/系统核准区间与同源、provenance 有效的各机位手部样本，不人为设立主副机位。自动核准由完成事件（AFTER_COMMIT）与分页 reconcile 兜底触发，单事务原子、幂等；已存在人工任务、任意 Revision 或非 `AUTO_SYSTEM` 创建者时不得覆写。
 - Redis 不作为事实数据库；RabbitMQ 不保存最终业务状态；对象存储不承载关系型业务状态。
 
 ## Module Boundaries
@@ -69,6 +69,7 @@ MediaPipe 手部预标注是数据处理主链的辅助能力；手部骨骼与�
 - 能在一个 Core API 数据库事务内可靠完成的操作，不引入消息、缓存或额外进程。耗时、跨进程或需要重试的工作才建立异步作业。
 - 默认优先交付一个可运行、可测试、可回退的纵向切片；用户明确要求的多个独立变更仍可在同一任务内完成，不因首个切片完成而提前结束。
 - UI 优先使用浏览器和现有组件库的原生能力；没有明确需求时，不引入新的设计系统、状态管理、播放器框架或动画库。
+- 产品界面不放置直连数据库的开发期运维操作（批量清理、批量重试、唤醒分析、废弃整组等）；这些能力仅保留在 vite dev 中间件与 `tools/` 命令行脚本，供隔离的开发/合成数据环境使用。若要在产品界面内“舍弃/删除整个采集组”，必须新增正式组删除 API（权限、审计、级联、S3 清理），不得复用 dev 直连脚本。
 - V1.36 Consolidated Baseline 不恢复未接线的 CaptureSync runtime，不新增持久化工作流投影、`next_action` / `blockers` 或通用工作流引擎；现役 `CaptureGroupView` 只读模型与前端派生提示保留。不恢复独立单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留；runtime 收缩按对应 D1–D5 决策及任务授权执行，各项决策不构成全部工作的统一阻塞条件。
 
 ## Data And Safety

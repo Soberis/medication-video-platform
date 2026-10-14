@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +53,20 @@ public class CaptureGroupViewQueryService {
 	public List<CaptureGroupFacts> findAll(UUID projectId) {
 		return this.sessionRepository
 			.findAllByProjectIdAndCaptureGroupWorkflowTrueOrderByCreatedAtDescCaptureSessionIdDesc(projectId)
+			.stream()
+			.map(session -> project(session, false))
+			.toList();
+	}
+
+	/**
+	 * System-only, cross-project paged projection of fully received capture groups. Used
+	 * by bounded background reconciliation (e.g. optimistic auto-approval); each returned
+	 * facts object already carries the frozen camera views. Project ACTIVE state is
+	 * enforced when the downstream system processing locks the project.
+	 */
+	@Transactional(readOnly = true)
+	public List<CaptureGroupFacts> findCompleteGroupsForSystemProcessing(int page, int size) {
+		return this.sessionRepository.findCompleteCaptureGroupSessions(PageRequest.of(page, Math.min(size, 100)))
 			.stream()
 			.map(session -> project(session, false))
 			.toList();

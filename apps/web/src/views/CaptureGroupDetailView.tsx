@@ -1,5 +1,5 @@
-import { Alert, App as AntdApp, Button, Modal, Popconfirm, Skeleton, Tooltip } from 'antd'
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react'
+import { Alert, App as AntdApp, Button, Modal, Skeleton, Tooltip } from 'antd'
+import { ArrowLeft, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -65,7 +65,6 @@ export default function CaptureGroupDetailView() {
   const [isReceiptConfirmationOpen, setIsReceiptConfirmationOpen] = useState(false)
   const [isReceiptFinalizePending, setIsReceiptFinalizePending] = useState(false)
   const [isDownloadingHdf5, setIsDownloadingHdf5] = useState(false)
-  const [isDiscarding, setIsDiscarding] = useState(false)
 
   const handleDownloadHdf5 = useCallback(async () => {
     if (isDownloadingHdf5) return
@@ -170,59 +169,6 @@ export default function CaptureGroupDetailView() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [location.state, navigate, nextGroup, prevGroup, projectId])
-
-  const handleQuickDiscardAndNext = useCallback(async () => {
-    if (isDiscarding) return
-    setIsDiscarding(true)
-    try {
-      const list = summaries.length > 0 ? summaries : await listAllCaptureGroupSummaries(projectId)
-      const currentIndex = list.findIndex(
-        (item) =>
-          item.capture_group_id === captureGroupId || item.capture_group_key === captureGroupId,
-      )
-      const nextTarget = list[currentIndex + 1] ?? list[currentIndex - 1] ?? null
-
-      const response = await fetch('/api/dev/clean-capture-group', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ captureGroupId }),
-      })
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        throw new Error(errorData?.error ?? '清理请求失败')
-      }
-
-      void message.success('已废弃并删除该视频，已为您切换至下一条。')
-      if (nextTarget && nextTarget.capture_group_id !== captureGroupId) {
-        const remainingSummaries = summaries.filter((item) => item.capture_group_id !== captureGroupId)
-        setSummaries(remainingSummaries)
-
-        const nextState = {
-          ...location.state,
-          captureGroupList: listState
-            ? {
-                ...listState,
-                rows: Array.isArray(listState.rows)
-                  ? listState.rows.filter((item) => item.capture_group_id !== captureGroupId)
-                  : [],
-                filteredRows: remainingSummaries,
-              }
-            : undefined,
-        }
-        void navigate(paths.captureGroup(projectId, nextTarget.capture_group_id), {
-          replace: true,
-          state: nextState,
-        })
-      } else {
-        void navigate(paths.captureGroups(projectId), { replace: true, state: location.state })
-      }
-    } catch (error) {
-      void message.error(`清理失败: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setIsDiscarding(false)
-    }
-  }, [captureGroupId, isDiscarding, listState, location.state, message, navigate, projectId, summaries])
-
 
   const receiptFinalizeRequest = useRef(false)
   const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
@@ -703,23 +649,6 @@ export default function CaptureGroupDetailView() {
                 </span>
               </Tooltip>
             ) : null}
-            <Popconfirm
-              title="废弃并删除当前视频？"
-              description="该操作将彻底清理当前视频及其关联的标注、AI与质检数据，并自动跳至下一条视频。无法撤销。"
-              okText="确认废弃"
-              cancelText="取消"
-              okButtonProps={{ danger: true, loading: isDiscarding }}
-              onConfirm={() => void handleQuickDiscardAndNext()}
-            >
-              <Button
-                danger
-                icon={<Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />}
-                loading={isDiscarding}
-                title="彻底清理当前视频并自动跳至下一条"
-              >
-                废弃并下一条
-              </Button>
-            </Popconfirm>
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
                 ref={receiptFinalizeTrigger}
@@ -799,7 +728,6 @@ export default function CaptureGroupDetailView() {
                 <CaptureGroupFocusedView
                   viewRows={viewRows}
                   viewState={viewState}
-                  projectId={projectId}
                   task={humanTask}
                   externalVideoRef={videoRef}
                   initialPlaybackTimeMs={preservedPlaybackTimeMs}

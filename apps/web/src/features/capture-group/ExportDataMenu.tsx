@@ -10,23 +10,13 @@ import {
   listAnnotationTasks,
   type Hdf5ExportTaskResponse,
 } from '@/api/annotation'
-import {
-  listAllCaptureGroupSummaries,
-  type CaptureGroupPipelineItem,
-  type CaptureGroupSummary,
-} from '@/api/capture-groups'
+import { listAllCaptureGroupSummaries, type CaptureGroupSummary } from '@/api/capture-groups'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { ExportTaskFloater } from '@/features/capture-group/ExportTaskFloater'
 import { isHumanAnnotationExportReady } from '@/features/capture-group-presentation'
 import { formatDateTime, parseAssetIdentity, shortId } from '@/features/catalog/catalog-presentation'
 
-export function ExportDataMenu({
-  projectId,
-  pipelineItems = {},
-}: {
-  projectId: string
-  pipelineItems?: Record<string, CaptureGroupPipelineItem>
-}) {
+export function ExportDataMenu({ projectId }: { projectId: string }) {
   const { message } = AntdApp.useApp()
   const [open, setOpen] = useState(false)
   const loading = false
@@ -84,24 +74,8 @@ export function ExportDataMenu({
     setOpen(false)
   }
 
-  // 严格过滤：仅收录已核准且已检出双手骨骼的真正可导出数据
-  const exportableRows = useMemo(
-    () =>
-      rows.filter((row) => {
-        const item = pipelineItems[row.capture_group_id]
-        if (!item) return true
-        if (
-          item.pipeline_status === 'NO_HAND' ||
-          item.pipeline_status === 'FAILED' ||
-          item.pipeline_status === 'NO_ACTION' ||
-          item.mp_hand_result === 'NO_HAND_DETECTED'
-        ) {
-          return false
-        }
-        return true
-      }),
-    [rows, pipelineItems],
-  )
+  // loadCandidates already restricts rows to approved, export-ready capture groups.
+  const exportableRows = rows
   const exportableIds = useMemo(() => exportableRows.map((row) => row.capture_group_id), [exportableRows])
   const selectedExportIds = useMemo(
     () => exportableIds.filter((id) => selectedIds.has(id)),
