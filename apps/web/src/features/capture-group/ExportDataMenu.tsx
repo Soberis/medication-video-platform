@@ -19,7 +19,6 @@ import { formatDateTime, parseAssetIdentity, shortId } from '@/features/catalog/
 export function ExportDataMenu({ projectId }: { projectId: string }) {
   const { message } = AntdApp.useApp()
   const [open, setOpen] = useState(false)
-  const loading = false
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [rows, setRows] = useState<CaptureGroupSummary[]>([])
   const [readState, setReadState] = useState<'loading' | 'success' | 'error'>('loading')
@@ -68,7 +67,6 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
   }
 
   function close() {
-    if (loading) return
     activeRequest.current?.abort()
     activeRequest.current = null
     setOpen(false)
@@ -193,7 +191,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
   }, [projectId, pollJob])
 
   async function startExport() {
-    if (loading || readState !== 'success' || !selectedExportIds.length) return
+    if (readState !== 'success' || !selectedExportIds.length) return
     setOpen(false)
     setFloaterOpen(true)
     void message.info('已提交后台导出任务，可在右下角浮窗查看进度。')
@@ -313,9 +311,6 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
         title="导出数据"
         width={620}
         destroyOnHidden
-        closable={!loading}
-        mask={{ closable: !loading }}
-        keyboard={!loading}
         footer={
           <div className="capture-group-export-modal-footer">
             <div className="capture-group-export-footer-info">
@@ -334,15 +329,13 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
               </span>
             </div>
             <div className="capture-group-export-modal-actions">
-              <Button aria-label="取消" disabled={loading} onClick={close}>
+              <Button aria-label="取消" onClick={close}>
                 取消
               </Button>
               <Button
                 type="primary"
                 aria-label="下载 HDF5"
-                aria-busy={loading}
-                disabled={loading || readState !== 'success' || !selectedExportIds.length}
-                loading={loading}
+                disabled={readState !== 'success' || !selectedExportIds.length}
                 onClick={() => void startExport()}
               >
                 下载 HDF5
@@ -380,7 +373,6 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                 locale={{ emptyText: '当前项目暂无已完成并通过确认的人工标注数据。' }}
                 onRow={(row) => ({
                   onClick: (event) => {
-                    if (loading) return
                     const target = event.target as HTMLElement
                     if (
                       target.closest('a') ||
@@ -401,7 +393,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                         aria-label="全选"
                         checked={allChecked}
                         indeterminate={indeterminate}
-                        disabled={loading || !exportableIds.length}
+                        disabled={!exportableIds.length}
                         onChange={(event) =>
                           setSelectedIds(new Set(event.target.checked ? exportableIds : []))
                         }
@@ -415,7 +407,6 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                       <Checkbox
                         aria-label={`选择导出 ${row.capture_group_key ?? shortId(row.capture_group_id)}`}
                         checked={selectedIds.has(row.capture_group_id)}
-                        disabled={loading}
                         onChange={(event) => toggleRow(row.capture_group_id, event.target.checked)}
                       />
                     ),

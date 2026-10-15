@@ -104,6 +104,25 @@ function Get-ListeningProcessId {
     return $null
 }
 
+function Wait-PortCompletelyFree {
+    param(
+        [int]$Port,
+        [int]$MaxWaitSeconds = 6
+    )
+
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds($MaxWaitSeconds)
+    while ([DateTimeOffset]::UtcNow -lt $deadline) {
+        $conns = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+        if (-not $conns) { return $true }
+
+        $summary = ($conns | Select-Object -ExpandProperty State -Unique) -join ', '
+        Write-Host "Port $Port is busy with transient connection ($summary). Waiting for release..." -ForegroundColor Yellow
+        Start-Sleep -Milliseconds 800
+    }
+
+    return (-not (Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue))
+}
+
 function Wait-CoreApiHealthy {
     param(
         [string]$HealthUri,
@@ -303,6 +322,7 @@ else {
 }
 
 if ($needStartApi) {
+    Wait-PortCompletelyFree $apiPort | Out-Null
     if (-not $env:MAVEN_OPTS) { $env:MAVEN_OPTS = '-Xms128m -Xmx512m' }
     $jvmArgs = if ($env:CORE_API_JVM_ARGS) { $env:CORE_API_JVM_ARGS } else { '-Xms256m -Xmx768m' }
     $s3Ep = if ($env:S3_ENDPOINT) { $env:S3_ENDPOINT } else { 'http://localhost:19000' }
