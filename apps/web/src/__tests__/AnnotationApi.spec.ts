@@ -115,25 +115,6 @@ describe('annotation task API', () => {
     )
   })
 
-  it('lists the visible CaptureGroup task queue and explains a qualified-state rejection', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ items: [], progress: emptyProgress }))
-      .mockResolvedValueOnce(
-        jsonResponse({ error_code: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED' }, { status: 409 }),
-      )
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(listAnnotationTasks(projectId)).resolves.toEqual({
-      items: [],
-      progress: emptyProgress,
-    })
-    await expect(listAnnotationTasks(projectId)).rejects.toMatchObject({
-      errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
-      message: '该机位视频尚未完成处理，暂不能开始标注。',
-    })
-  })
-
   it('keeps the completed CaptureGroup task and cleaning result in the list response', async () => {
     vi.stubGlobal(
       'fetch',

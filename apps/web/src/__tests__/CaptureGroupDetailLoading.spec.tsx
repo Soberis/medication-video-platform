@@ -18,7 +18,6 @@ import {
   projectId,
   qualityFixture,
   taskList,
-  viewQuality,
 } from './capture-group-fixtures'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -422,17 +421,6 @@ function stubHookDetail(
     }
     if (path.endsWith('/annotation-label-schema'))
       return Promise.resolve(jsonResponse(labelSchema()))
-    if (path.includes('/clip-assets/') && path.endsWith('/quality-review')) {
-      const clipAssetId = path.split('/clip-assets/')[1]?.split('/')[0] ?? ''
-      const reviewGroup = groups.find((candidate) =>
-        candidate.streams.some((stream) => stream.clip_asset_id === clipAssetId),
-      )
-      if (reviewGroup) {
-        return Promise.resolve(
-          jsonResponse(viewQuality(clipAssetId, qualityFixture(reviewGroup, 'QUALIFIED'))),
-        )
-      }
-    }
     return Promise.reject(new Error(`Unexpected fetch: ${url}`))
   })
   vi.stubGlobal('fetch', fetchMock)

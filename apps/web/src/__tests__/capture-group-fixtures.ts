@@ -19,7 +19,6 @@ import type {
   CaptureGroupSummary,
 } from '@/api/capture-groups'
 import type { ClipAssetPlaybackGrant } from '@/api/catalog'
-import type { QualityReview } from '@/api/quality'
 
 export const projectId = '30000000-0000-4000-8000-000000000001'
 export const groupId = '60000000-0000-4000-8000-000000000001'
@@ -237,8 +236,6 @@ export function stubGroupDetail(
       number,
       'FAILED' | 'NO_HAND_DETECTED' | 'HAND_DETECTED' | 'UNKNOWN'
     >
-    viewQualityByCamera?: Record<number, QualityReview>
-    viewQualityAfterSaveByCamera?: Record<number, QualityReview>
     reviewResponse?: Partial<AnnotationReview>
     reviewError?: { status: number; body: object }
     actionCandidates?: unknown[]
@@ -329,41 +326,6 @@ export function stubGroupDetail(
     }
     if (url.endsWith('/annotation-label-schema')) {
       return Promise.resolve(jsonResponse(labelSchema()))
-    }
-    if (url.includes('/quality-review') && url.includes('/clip-assets/')) {
-      const clipAssetId = url.split('/clip-assets/')[1]?.split('/')[0]
-      const cameraNumber = group.streams.find(
-        (stream) => stream.clip_asset_id === clipAssetId,
-      )?.camera_number
-      if (init?.method === 'PUT' && cameraNumber !== undefined) {
-        const current =
-          options.viewQualityByCamera?.[cameraNumber] ??
-          (viewQuality(clipAssetId ?? '', options.quality) as QualityReview)
-        const request = JSON.parse(String(init.body ?? '{}')) as {
-          decision?: QualityReview['decision']
-          reason_code?: QualityReview['reason_code']
-        }
-        const next =
-          options.viewQualityAfterSaveByCamera?.[cameraNumber] ??
-          ({
-            ...current,
-            decision: request.decision ?? 'QUALIFIED',
-            reason_code: request.reason_code ?? 'MEETS_REQUIREMENTS',
-            reviewed_by: 'reviewer',
-            reviewed_at: '2026-08-20T01:02:00Z',
-            version: current.version + 1,
-          } satisfies QualityReview)
-        if (options.viewQualityByCamera) options.viewQualityByCamera[cameraNumber] = next
-        return Promise.resolve(jsonResponse(next))
-      }
-      return Promise.resolve(
-        jsonResponse(
-          cameraNumber !== undefined
-            ? (options.viewQualityByCamera?.[cameraNumber] ??
-                (viewQuality(clipAssetId ?? '', options.quality) as QualityReview))
-            : viewQuality(clipAssetId ?? '', options.quality),
-        ),
-      )
     }
     if (
       url.includes('/clip-assets/') &&
@@ -638,24 +600,6 @@ export function qualityFixture(
           },
     input_version: result === 'UNREVIEWED' ? null : 'capture-group-view-set.v1:synthetic',
     confirmed_view_set_sha256: null,
-  }
-}
-
-export function viewQuality(clipAssetId: string, quality: CaptureGroupQualityReview) {
-  const view = quality.confirmed_view_set?.views.find(
-    (candidate) => candidate.clip_asset_id === clipAssetId,
-  )
-  return {
-    quality_review_id:
-      view?.quality_review_decision === 'REJECTED' ? '46000000-0000-4000-8000-000000000001' : null,
-    project_id: projectId,
-    clip_asset_id: clipAssetId,
-    decision: view?.quality_review_decision === 'REJECTED' ? 'REJECTED' : 'QUALIFIED',
-    reason_code:
-      view?.quality_review_decision === 'REJECTED' ? 'OTHER_QUALITY_FAILURE' : 'MEETS_REQUIREMENTS',
-    reviewed_by: 'reviewer',
-    reviewed_at: '2026-08-20T01:02:00Z',
-    version: view?.quality_review_version ?? 0,
   }
 }
 

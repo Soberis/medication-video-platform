@@ -1009,18 +1009,6 @@ describe('simple camera submission workflow', () => {
       taskAfterAssignment: assignedTask,
       quality: qualityFixture(group, 'UNREVIEWED'),
       candidateStatus: 'HAND_DETECTED',
-      viewQualityByCamera: {
-        1: {
-          quality_review_id: null,
-          project_id: projectId,
-          clip_asset_id: group.streams[0]!.clip_asset_id,
-          decision: 'UNREVIEWED',
-          reason_code: null,
-          reviewed_by: null,
-          reviewed_at: null,
-          version: 0,
-        },
-      },
       actionCandidates: [
         {
           action_candidate_id: 'candidate-direct-submit',

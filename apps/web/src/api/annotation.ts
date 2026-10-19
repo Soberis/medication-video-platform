@@ -673,7 +673,6 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_TASK_ACCESS_DENIED: '当前身份没有访问标注任务的权限。',
     ANNOTATION_TASK_NOT_FOUND: '标注任务不存在，请刷新任务列表。',
     ANNOTATION_REVISION_NOT_FOUND: '标注修订不存在，请刷新任务列表。',
-    ANNOTATION_TASK_QUALITY_NOT_QUALIFIED: '该机位视频尚未完成处理，暂不能开始标注。',
     ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED:
       '采集记录尚未就绪：请等待视频处理完成，并至少保留一路可标注机位。',
     ANNOTATION_TASK_INPUT_VERSION_CONFLICT: '采集输入已变化，请刷新任务后重新提交。',
@@ -685,7 +684,6 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_TASK_NOT_ASSIGNEE: '只有该任务的执行人可以提交标注。',
     ANNOTATION_TASK_ALREADY_SUBMITTED: '标注已提交，等待复核。',
     ANNOTATION_TASK_NOT_SUBMITTED: '该标注任务已不是待复核状态，请刷新任务列表。',
-    ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该采集记录当前不满足标注提交条件。',
     ANNOTATION_SEGMENT_TIME_RANGE_INVALID: '每个时间段的结束时间必须晚于开始时间。',
     ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了当前机位已确认的视频时长。',
     ANNOTATION_MEDIA_DURATION_UNVERIFIED: '当前机位尚无已验证的视频时长；请完成媒体检查后重试。',
@@ -699,10 +697,6 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_REVISION_IDEMPOTENCY_KEY_REUSED: '本次复核请求与已有记录冲突，请刷新后重试。',
     ANNOTATION_REVISION_NOT_CURRENT: '当前修订已不是待复核版本，请刷新任务列表查看最新状态。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该采集记录当前不满足标注复核条件。',
-    ANNOTATION_GROUP_CLEANING_RECHECK_NOT_READY:
-      '当前采集记录的标注修订、复核或任务状态不允许重新执行标注检查。',
-    ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED:
-      '标注检查不接受浏览器提供的视图映射；请刷新后重试。',
     HDF5_EXPORT_UNAVAILABLE: 'HDF5 演示数据仅对合成数据配置开放。',
     HDF5_EXPORT_NOT_READY: '当前没有审核通过的人工标注，暂时不能导出 HDF5 演示数据。',
     HDF5_EXPORT_DATA_INVALID: 'HDF5 演示数据的当前来源校验未通过，请刷新后重试。',
