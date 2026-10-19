@@ -3,9 +3,9 @@
 > 文档状态：P0 详细设计（评审稿）
 > 最后更新：2026-09-01
 
-本文的大部分状态迁移仍是 V1.28 运行时设计和历史迁移证据，不是当前完整产品规范。当前产品口径以 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) 和 [自动标注与异常人工接管 ADR](../adr/0004-automatic-annotation-approval-policy.md) 为准；V1.35 的自动任务、未提交草稿、待人工处理 与 Review APPROVED 语义尚需按实现和契约验收补入本文件。本文保留旧状态、迁移和候选实现事实时，明确标为历史；不把单视频任务或旧导出重新定义为当前产品流程。
+本文的大部分状态迁移仍是 V1.28 运行时设计和历史迁移证据，不是当前完整产品规范。当前产品口径以 [V1.36 Consolidated Baseline](../requirements/baselines/V1.36/配药视频数据处理平台需求文档_V1.36.md) 和 [乐观自动核准与异常重做 ADR](../adr/0006-optimistic-auto-approval-and-exception-rework.md) 为准；V1.36 的双合格乐观自动核准（`AUTO_SYSTEM` Revision 1 APPROVED、任务 COMPLETED）、异常重新编辑（DRAFT→Revision 2）与无手/失败不核准语义尚需按实现和契约验收补入本文件。本文保留旧状态、迁移和候选实现事实时，明确标为历史；不把单视频任务或旧导出重新定义为当前产品流程。
 
-当前主路径是自动生成候选草稿 → 可选人工修改 → 显式提交 → 既有 Review → 最终导出校验。本文历史状态不覆盖该要求。
+当前主路径是自动生成候选与手部检测 → 双合格乐观自动核准（Revision 1，`AUTO_SYSTEM` APPROVED，COMPLETED）→ 最终导出校验；抽检异常时一键【重新编辑】打回草稿 → 显式提交生成 Revision 2。本文历史状态不覆盖该要求。
 
 ## 1. 原则
 

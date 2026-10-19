@@ -1,10 +1,10 @@
 # 部署、容量与灾难恢复
 
-> 文档状态：P0 运行设计（评审稿，V1.35 对齐待校订）
+> 文档状态：P0 运行设计（评审稿，V1.36 对齐待校订）
 > 最后更新：2026-09-15
 
-当前产品边界以 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) 和
-[自动标注与异常人工接管 ADR](../adr/0004-automatic-annotation-approval-policy.md) 为准；本文件只描述部署、容量与恢复边界。正文中保留的 V1.28、旧 CSV 和旧导出名称仅作历史部署证据，不能覆盖 V1.35 的唯一 HDF5 与草稿准备与显式提交目标。
+当前产品边界以 [V1.36 Consolidated Baseline](../requirements/baselines/V1.36/配药视频数据处理平台需求文档_V1.36.md) 和
+[乐观自动核准与异常重做 ADR](../adr/0006-optimistic-auto-approval-and-exception-rework.md) 为准；本文件只描述部署、容量与恢复边界。正文中保留的 V1.28、旧 CSV 和旧导出名称仅作历史部署证据，不能覆盖 V1.36 的唯一 HDF5 与双合格乐观自动核准目标。
 
 ## 1. 决策边界
 
@@ -13,7 +13,7 @@
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
 - 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
-- V1.35 当前不部署独立 Dataset Export Worker；唯一的 `human-demonstration-hdf5.v2` 由 Core API 在最终准入通过后受控生成，不构成独立 Worker 工作负载。自动标注的真实模型推理由受控 AI Worker 执行，草稿来源记录仍由 Core API 持有。
+- V1.36 当前不部署独立 Dataset Export Worker；唯一的 `human-demonstration-hdf5.v2` 由 Core API 在双合格乐观自动核准取得准入后受控生成，不构成独立 Worker 工作负载。自动标注的真实模型推理由受控 AI Worker 执行，候选与手部检测、自动核准与 Revision 事实仍由 Core API 持有。
   历史 Export Worker 与 DatasetVersion 运行表面已由 V66 退役，不能作为当前容量或运行拓扑依据；历史迁移文件仍保留。
 
 ## 2. 工作负载
@@ -43,7 +43,7 @@
 | Sprint 0 | Core API、Web、PostgreSQL、本地 S3 兼容对象存储、平台账号会话 | RabbitMQ、Redis、CVAT、Worker、外部 IdP |
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
 | 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、独立 Export Worker |
-| 隐私与标注 | 平台账号会话、人工接管能力 | 无证据的 Redis、未批准的外部 IdP |
+| 隐私与标注 | 平台账号会话、异常重新编辑能力 | 无证据的 Redis、未批准的外部 IdP |
 | human-demonstration-hdf5.v2 | Core API 最终准入和受控导出 | DatasetVersion/Export Worker、无证据的 Redis |
 | 自动标注 | AI Worker、RabbitMQ、获批准的本地模型、Core API 草稿初始化规则 | 未验收的批量放量和无人工回退策略 |
 

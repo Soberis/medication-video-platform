@@ -1,12 +1,12 @@
 # 异步作业协议
 
-> 文档状态：P0 详细设计（评审稿，V1.35 对齐待校订）
+> 文档状态：P0 详细设计（评审稿，V1.36 对齐待校订）
 > 适用范围：媒体探测/转码/抽帧、跨进程媒体处理、MediaPipe 与 Action Candidate 作业；当前 `human-demonstration-hdf5.v2` 导出为 Core API 内的受控导出操作
 > 最后更新：2026-09-01
 
-当前需求口径以 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) 和
-[自动标注与异常人工接管 ADR](../adr/0004-automatic-annotation-approval-policy.md) 为准。V1.28 及之前的单视频和
-数据集作业协议只作为历史迁移/审计材料，不构成当前 API、队列或 Worker 承诺。本文中旧 DatasetExport、旧 hand-landmarks 导出和历史状态段落，在完成校订前不得覆盖 V1.35 的唯一 HDF5 与草稿准备与显式提交边界。
+当前需求口径以 [V1.36 Consolidated Baseline](../requirements/baselines/V1.36/配药视频数据处理平台需求文档_V1.36.md) 和
+[乐观自动核准与异常重做 ADR](../adr/0006-optimistic-auto-approval-and-exception-rework.md) 为准。V1.28 及之前的单视频和
+数据集作业协议只作为历史迁移/审计材料，不构成当前 API、队列或 Worker 承诺。本文中旧 DatasetExport、旧 hand-landmarks 导出和历史状态段落，在完成校订前不得覆盖 V1.36 的唯一 HDF5 与双合格乐观自动核准边界。
 
 ## 1. 核心决策
 

@@ -33,9 +33,9 @@ V1.36 当前目标为自动准备草稿、乐观自动核准（默认双合格�
 
 ## 前序实现与历史证据
 
-> 历史导出选择实现证据：[V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) 已重新定义当前语义；本段保留既有组件回归入口 `HumanDemonstrationHdf5ExportButton.spec.tsx`、`CaptureGroupListView.spec.tsx` 和 `capture-group.spec.ts`，不要求阅读旧版本才能理解当前产品。
+> 历史导出选择实现证据：当前语义以 [V1.36 Consolidated Baseline](../requirements/baselines/V1.36/配药视频数据处理平台需求文档_V1.36.md) 为准（V1.35 首次重新定义、V1.36 继承并改为双合格自动核准）；本段保留既有组件回归入口 `HumanDemonstrationHdf5ExportButton.spec.tsx`、`CaptureGroupListView.spec.tsx` 和 `capture-group.spec.ts`，不要求阅读旧版本才能理解当前产品。
 
-> 以下链接和说明仅用于历史实现证据、迁移和审计，不构成当前需求入口；当前视觉和导出语义以 V1.35、设计系统与当前 Web UX 规范为准。<br>
+> 以下链接和说明仅用于历史实现证据、迁移和审计，不构成当前需求入口；当前视觉和导出语义以 V1.36、设计系统与当前 Web UX 规范为准。<br>
 > 上一正式运行时基线：[V1.28 单一 CaptureGroup 路径与唯一手部检测导出](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)<br>
 > 上一正式技术设计：[V1.28 单一导出边界设计](../history/architecture/v1.28-single-export-consolidation.md)<br>
 > 上一基线与审计参考：[V1.27 单一 CaptureGroup 产品路径](../history/architecture/v1.27-single-capture-group-workflow.md)、[AI evidence pipeline audit](../history/architecture/v1.27-ai-evidence-audit.md)与[training traceability audit](../history/architecture/v1.27-training-traceability.md)<br>
@@ -44,7 +44,7 @@ V1.36 当前目标为自动准备草稿、乐观自动核准（默认双合格�
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
 > 最后更新：2026-09-04
 
-下文记录 V1.28 时期的需求与实现证据，不定义 V1.35 的完成状态。V1.28 runtime、V1.29–V1.34 需求和历史导出语义均只作为上一阶段证据；它们不构成 V1.35 当前入口、实现完成声明或额外兼容承诺。批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
+下文记录 V1.28 时期的需求与实现证据，不定义 V1.36 的完成状态。V1.28 runtime、V1.29–V1.35 需求和历史导出语义均只作为上一阶段证据；它们不构成 V1.36 当前入口、实现完成声明或额外兼容承诺。批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
 V1.28 继续保留 `CaptureSession`、`CameraSet`、`CameraStream`、`ClipAsset`、Media Probe、MediaPipe Candidate、权限、审计和 provenance 等低层事实，但不再把旧单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 作为当前业务流程。V1.27 的实现状态和历史导出语义只作为上一基线证据，不自动转化为兼容要求。
 

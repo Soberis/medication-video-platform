@@ -1,19 +1,19 @@
 # Architecture Documents
 
-本索引汇总配药视频数据处理平台的当前规范与历史参考。当前唯一需求入口是 V1.35 Consolidated Baseline：它冻结自包含的产品边界、CaptureGroup 主链、AI/人工事实隔离和唯一 HDF5 导出语义；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍是相关实施的决策门禁。V1.28 仍是上一正式运行时基线，V1.35 文档收敛不表示 runtime 已全部实现或可随意删除兼容内容。Candidate、权限、审计和 provenance 边界继续有效。
+本索引汇总配药视频数据处理平台的当前规范与历史参考。当前唯一需求入口是 V1.36 Consolidated Baseline：它冻结自包含的产品边界、CaptureGroup 主链、双合格乐观自动核准与异常重新编辑、AI/人工事实隔离和唯一 HDF5 导出语义；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍是相关实施的决策门禁。V1.28 仍是上一正式运行时基线，V1.36 文档收敛不表示 runtime 已全部完成发布验收或可随意删除兼容内容。Candidate、权限、审计和 provenance 边界继续有效。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [V1.35 Consolidated Baseline（当前唯一需求）](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) | 当前唯一完整产品需求；D1、D4 已实施首轮收缩，D2、D3、D5 仍为实施前决策门禁 |
-| [动作候选技术设计（支持性 DRAFT）](./v1.34-action-annotation.md) | 解释动作候选、Worker、时间映射和人工编辑的实现边界；不得覆盖 V1.35 |
-| [自动标注与显式提交 ADR](../adr/0004-automatic-annotation-approval-policy.md) | 自动生成草稿、可选修改、最后显式提交；复用现有 Revision / Review |
+| [V1.36 Consolidated Baseline（当前唯一需求）](../requirements/baselines/V1.36/配药视频数据处理平台需求文档_V1.36.md) | 当前唯一完整产品需求；双合格乐观自动核准、异常一键重新编辑；D1、D4 已实施首轮收缩，D2、D3、D5 仍为实施前决策门禁 |
+| [动作候选技术设计（支持性 DRAFT）](./v1.34-action-annotation.md) | 解释动作候选、Worker、时间映射和人工编辑的实现边界；不得覆盖 V1.36 |
+| [乐观自动核准与异常重做 ADR](../adr/0006-optimistic-auto-approval-and-exception-rework.md) | 双合格自动核准（Revision 1，`AUTO_SYSTEM` APPROVED）、异常一键重新编辑；复用现有 Revision / Review |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
 | [部署、容量与灾难恢复](./deployment-capacity-and-dr.md) | 拓扑、容量、性能、备份、RPO/RTO 和恢复演练 |
 | [前端设计系统](../DESIGN_SYSTEM.md) | 唯一前端视觉权威、Token、AppShell、共享布局和通用交互语言 |
 | [Web 前端与用户体验设计规范](./web-ux-and-frontend-guidelines.md) | 信息架构、页面状态、组件与状态管理启用门槛、可访问性和前端验收 |
-| [当前需求追踪与实现证据](./requirements-traceability.md) | V1.35 需求对应的实现/审计证据；未验收条目不得视为完成 |
+| [当前需求追踪与实现证据](./requirements-traceability.md) | V1.36 需求对应的实现/审计证据；未验收条目不得视为完成 |
 
 ## 历史参考（按需读取）
 
@@ -25,7 +25,7 @@
 | [状态机与领域守卫](./state-machines.md) | 保留事实与守卫依据；旧导出、历史 Cleaning 和旧复核规则待按当前代码校订 |
 | [异步作业协议](./asynchronous-job-protocol.md) | 保留 outbox/inbox、lease/heartbeat 与重试；旧导出类型描述待更新 |
 
-V1.35 已自包含上述当前产品边界和必要可靠性约束；无需靠这些旧段落补足需求。D1、D4 已完成对应 dev 收缩，其余决策各自只约束相关实施项；审计中的方案不能当作批准记录。
+V1.36 已自包含上述当前产品边界和必要可靠性约束；无需靠这些旧段落补足需求。D1、D4 已完成对应 dev 收缩，其余决策各自只约束相关实施项；审计中的方案不能当作批准记录。
 
 历史架构和迁移资料不得覆盖当前规范；仅在迁移、兼容性或审计任务需要时读取[历史索引](./history-index.md)。
 
@@ -35,7 +35,7 @@ V1.35 已自包含上述当前产品边界和必要可靠性约束；无需靠�
 
 ## 维护规则
 
-- 当前业务需求唯一以 `docs/requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md` 为完整入口；本目录不复制需求正文。
+- 当前业务需求唯一以 `docs/requirements/baselines/V1.36/配药视频数据处理平台需求文档_V1.36.md` 为完整入口；本目录不复制需求正文。
 - 总体技术设计只保存跨领域决策；详细规则进入对应专题文档。
 - `docs/DESIGN_SYSTEM.md` 是唯一前端视觉权威；Web 领域 UX、实现、状态和验收规则由前端体验规范补充，后者不得另建视觉语言。
 - 已批准技术决策进入 `docs/adr/`；详细设计不得覆盖 ADR。

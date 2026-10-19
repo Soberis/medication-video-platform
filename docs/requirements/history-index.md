@@ -11,7 +11,7 @@
 - [V1.30 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)：V1.31 之前的历史 DRAFT。
 - [V1.29 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)：V1.30 之前的历史 DRAFT。
 - [V1.29 视频工作台 UX 补充](../history/requirements/baselines/V1.29/v1.29-video-workspace-ux.md)：V1.29 的历史 UX 补充文档。
-- [V1.28 配药视频数据管理平台需求文档](./baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)：上一正式运行时基线；当前产品语义以 V1.35 为准。
+- [V1.28 配药视频数据管理平台需求文档](./baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)：上一正式运行时基线；当前产品语义以 V1.36 为准。
 
 ## 更早正式版本
 
