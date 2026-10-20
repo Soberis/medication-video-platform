@@ -104,6 +104,56 @@ function Get-ListeningProcessId {
     return $null
 }
 
+function Ensure-RemoteWorkerPortProxy {
+    $rules = @(
+        @{ ListenPort = 5673; ConnectPort = 5672; Name = "RabbitMQ (4090 Worker)" },
+        @{ ListenPort = 19001; ConnectPort = 19000; Name = "S3 (4090 Worker)" }
+    )
+
+    $portproxyConfig = (& netsh interface portproxy show all) -join "`n"
+
+    $missingRules = @()
+    foreach ($r in $rules) {
+        $lp = $r.ListenPort
+        $cp = $r.ConnectPort
+        if ($portproxyConfig -notmatch "\b$lp\b.*\b$cp\b") {
+            $missingRules += $r
+        }
+    }
+
+    if ($missingRules.Count -eq 0) {
+        return
+    }
+
+    Write-Host "`n[*] 检测到缺少跨机 4090 Worker 端口转发规则，正在尝试自动补充..." -ForegroundColor Yellow
+    $allSucceeded = $true
+    foreach ($r in $missingRules) {
+        $lp = $r.ListenPort
+        $cp = $r.ConnectPort
+        $cmd = "netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=$lp connectaddress=127.0.0.1 connectport=$cp"
+        try {
+            $null = Invoke-Expression $cmd 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [√] 已添加 $($r.Name) 转发: 0.0.0.0:$lp -> 127.0.0.1:$cp" -ForegroundColor Green
+            }
+            else {
+                $allSucceeded = $false
+            }
+        }
+        catch {
+            $allSucceeded = $false
+        }
+    }
+
+    if (-not $allSucceeded) {
+        Write-Warning "自动添加端口转发需要管理员权限。如果 Ubuntu 4090 无法连接，请在管理员 PowerShell 中执行以下命令："
+        foreach ($r in $missingRules) {
+            Write-Host "  netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=$($r.ListenPort) connectaddress=127.0.0.1 connectport=$($r.ConnectPort)" -ForegroundColor Cyan
+        }
+        Write-Host ""
+    }
+}
+
 function Wait-PortCompletelyFree {
     param(
         [int]$Port,
@@ -234,6 +284,8 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue) -or -not (docker ver
 $composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
 & docker compose @composeEnvironmentArguments -f $composeFile up -d
 if ($LASTEXITCODE -ne 0) { throw 'Local infrastructure did not start.' }
+
+Ensure-RemoteWorkerPortProxy
 
 $pgPort = if ($env:POSTGRES_PORT) { [int]$env:POSTGRES_PORT } else { 15432 }
 $s3Port = if ($env:S3_PORT) { [int]$env:S3_PORT } else { 9000 }
